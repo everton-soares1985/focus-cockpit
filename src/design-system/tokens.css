@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #060b13;
+  --color-surface: #0c1624;
+  --color-surface-raised: #111d2d;
+  --color-surface-soft: #162235;
+  --color-border: #26364a;
+  --color-border-strong: #344a64;
+  --color-text: #f4f7fb;
+  --color-text-muted: #91a0b5;
+  --color-lane-a: #28d7f0;
+  --color-lane-b: #f5a716;
+  --color-success: #42c789;
+  --color-danger: #ef6a78;
+}
+
+:root {
+  color-scheme: dark;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
