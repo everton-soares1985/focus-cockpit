@@ -15,6 +15,7 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 const SCHEMA_VERSION: u32 = 2;
 const MAX_BACKUP_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_BACKUP_FILES: usize = 10_000;
+const MAX_MANIFEST_BYTES: u64 = 5 * 1024 * 1024;
 
 #[derive(Debug, Serialize)]
 pub struct BackupError {
@@ -113,13 +114,25 @@ fn collect_directory_files(
             BackupError::new("storage_unavailable", "Os anexos não puderam ser lidos.")
         })?;
         let path = entry.path();
-        if path.is_dir() {
+        let file_type = entry.file_type().map_err(|_| {
+            BackupError::new(
+                "storage_unavailable",
+                "O tipo de um anexo não pôde ser verificado.",
+            )
+        })?;
+        if file_type.is_symlink() {
+            return Err(BackupError::new(
+                "unsafe_storage_entry",
+                "O armazenamento de anexos contém um link simbólico não permitido.",
+            ));
+        }
+        if file_type.is_dir() {
             return Err(BackupError::new(
                 "unexpected_storage_layout",
                 "Foi encontrada uma subpasta inesperada nos anexos.",
             ));
         }
-        if path.is_file() {
+        if file_type.is_file() {
             let name = path
                 .file_name()
                 .and_then(|value| value.to_str())
@@ -345,6 +358,12 @@ fn validate_archive(path: &Path) -> Result<(BackupManifest, BackupSummary), Back
                 "O manifesto do backup não foi encontrado.",
             )
         })?;
+        if entry.size() > MAX_MANIFEST_BYTES {
+            return Err(BackupError::new(
+                "manifest_too_large",
+                "O manifesto do backup ultrapassa o limite permitido.",
+            ));
+        }
         serde_json::from_reader(&mut entry).map_err(|_| {
             BackupError::new("manifest_invalid", "O manifesto do backup está inválido.")
         })?
@@ -659,14 +678,18 @@ pub fn restore_backup(
     }
 
     let restore_staging = config.join(format!(".restore-{}", Uuid::new_v4()));
-    extract_archive(&backup_path, &restore_staging, &manifest)?;
+    if let Err(error) = extract_archive(&backup_path, &restore_staging, &manifest) {
+        let _ = fs::remove_dir_all(&restore_staging);
+        return Err(error);
+    }
     let rollback = config.join(format!(".rollback-{}", Uuid::new_v4()));
-    fs::create_dir_all(&rollback).map_err(|_| {
-        BackupError::new(
+    if fs::create_dir_all(&rollback).is_err() {
+        let _ = fs::remove_dir_all(&restore_staging);
+        return Err(BackupError::new(
             "restore_prepare_failed",
             "A restauração não pôde ser preparada.",
-        )
-    })?;
+        ));
+    }
 
     let mut protected_names = Vec::new();
     for name in ["painel.sqlite3", "credentials", "thumbnails"] {
