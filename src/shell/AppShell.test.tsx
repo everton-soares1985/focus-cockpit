@@ -58,6 +58,6 @@ test('navigates correctly and bypasses onboarding if seen', async () => {
 
   // Shell should render the header instead of the welcome screen
   await waitFor(() => {
-    expect(screen.getByText('Focus Cockpit')).toBeDefined();
+    expect(screen.getByText(/Focus Cockpit/i)).toBeDefined();
   });
 });

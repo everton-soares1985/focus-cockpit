@@ -28,7 +28,7 @@ data/local/*
 !data/local/.keep
 data/demo/*
 !data/demo/demo_data.sqlite
-credentials/
-thumbnails/
-backups/
-painel.sqlite3*
+/credentials/
+/thumbnails/
+/backups/
+/painel.sqlite3*

@@ -1,11 +1,12 @@
 import { createBrowserRouter } from 'react-router-dom';
 import AppShell from '../shell/AppShell';
 
-const Placeholder = ({ title }: { title: string }) => (
-  <div className="flex h-full items-center justify-center text-text-muted">
-    {title}
-  </div>
-);
+import FocusScreen from '../focus/FocusScreen';
+import PlanScreen from '../plan/PlanScreen';
+import ProjectsScreen from '../projects/ProjectsScreen';
+import CoursesScreen from '../courses/CoursesScreen';
+import CredentialsScreen from '../credentials/CredentialsScreen';
+import FilesScreen from '../shortcuts/FilesScreen';
 
 export const router = createBrowserRouter([
   {
@@ -14,27 +15,27 @@ export const router = createBrowserRouter([
     children: [
       {
         path: 'focus',
-        element: <Placeholder title="Focus Cockpit Screen" />,
+        element: <FocusScreen />,
       },
       {
         path: 'plan',
-        element: <Placeholder title="Plan Screen" />,
+        element: <PlanScreen />,
       },
       {
         path: 'projects',
-        element: <Placeholder title="Projects Screen" />,
+        element: <ProjectsScreen />,
       },
       {
         path: 'courses',
-        element: <Placeholder title="Courses Screen" />,
+        element: <CoursesScreen />,
       },
       {
         path: 'credentials',
-        element: <Placeholder title="Credentials Screen" />,
+        element: <CredentialsScreen />,
       },
       {
         path: 'files',
-        element: <Placeholder title="Files Screen" />,
+        element: <FilesScreen />,
       },
     ],
   },
