@@ -148,7 +148,13 @@ De `src/platform/backups.ts`:
 - `inspectBackup(backupPath)`
 - `restoreBackupConfirmed(backupPath)`
 
+De `src/app/demoHooks.ts`:
+
+- `useClearDemoData()`
+
 Coloque um acesso discreto de `Backup e restauração` no cabeçalho, preferencialmente em um menu de configurações. Antes de restaurar, mostre o resumo retornado por `inspectBackup`, peça confirmação explícita e só então chame `restoreBackupConfirmed`. Após sucesso, recarregue a janela para limpar o cache visual.
+
+No mesmo menu, ofereça `Limpar dados de demonstração`, com confirmação explícita. Essa ação deve usar `useClearDemoData()`; não escreva exclusões próprias.
 
 ## 5. Telas obrigatórias
 
@@ -224,7 +230,7 @@ Antes de encerrar:
 1. Todas as rotas funcionam sem recarregar a janela.
 2. Nenhuma tela é placeholder.
 3. Todos os dados vêm dos hooks/repositórios reais.
-4. Não existe dado pessoal, token, caminho `C:\Users\...` ou segredo no código.
+4. Não existe dado pessoal, credencial, caminho de perfil real ou segredo no código.
 5. Não existe fundo claro, sidebar ou botão morto.
 6. Os formulários exibem erros de validação compreensíveis.
 7. Lint, testes e build passam:
@@ -238,7 +244,7 @@ pnpm build
 8. Rode também, sem alterar o Rust:
 
 ```powershell
-$env:PATH += ";$env:USERPROFILE\.cargo\bin;C:\Users\User\scoop\apps\mingw\current\bin"
+$env:PATH += ";$env:USERPROFILE\.cargo\bin"
 Set-Location src-tauri
 cargo fmt --check
 cargo clippy --locked -- -D warnings

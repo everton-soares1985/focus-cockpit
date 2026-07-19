@@ -13,8 +13,18 @@ export default function AppShell() {
     queryKey: ['db-init'],
     queryFn: async () => {
       const db = await getDb();
-      const result = await db.select<{ count: number }[]>('SELECT COUNT(*) as count FROM projects');
-      return result[0].count > 0;
+      const result = await db.select<{ initialized: number }[]>(
+        `SELECT EXISTS (
+           SELECT 1 FROM projects
+           UNION ALL SELECT 1 FROM weekly_priorities
+           UNION ALL SELECT 1 FROM plan_items
+           UNION ALL SELECT 1 FROM plan_notes
+           UNION ALL SELECT 1 FROM courses
+           UNION ALL SELECT 1 FROM credentials
+           UNION ALL SELECT 1 FROM shortcuts
+         ) AS initialized`,
+      );
+      return result[0].initialized === 1;
     },
   });
 

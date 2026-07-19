@@ -1,0 +1,56 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Web, Rust and SQLite checks
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.19.0"
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate frontend
+        run: pnpm check
+
+      - name: Check Rust formatting
+        working-directory: src-tauri
+        run: cargo +stable-x86_64-pc-windows-msvc fmt --check
+
+      - name: Lint native code
+        working-directory: src-tauri
+        run: cargo +stable-x86_64-pc-windows-msvc clippy --locked -- -D warnings
+
+      - name: Test SQLite migrations and invariants
+        working-directory: src-tauri/migration-tests
+        run: cargo +stable-x86_64-pc-windows-msvc test --locked
