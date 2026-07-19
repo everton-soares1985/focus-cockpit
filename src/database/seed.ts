@@ -1,6 +1,8 @@
 import Database from '@tauri-apps/plugin-sql';
+import { getWeekStart } from '../focus/week';
 
 export async function runDemoSeed(db: Database) {
+  const currentWeek = getWeekStart();
   try {
     await db.execute('BEGIN TRANSACTION');
 
@@ -22,7 +24,7 @@ export async function runDemoSeed(db: Database) {
          name=excluded.name, lane=excluded.lane, area=excluded.area, status=excluded.status, 
          priority=excluded.priority, next_action=excluded.next_action, folder_path=excluded.folder_path, 
          notes=excluded.notes, updated_at=datetime('now')`,
-      ["proj-demo-2", "Automação Script Genérica", "A", "Marketing", "Ativo", "Média", "Revisar código", "C:\\Demo\\LaneA\\Projeto2", "Usar LangChain"]
+      ["proj-demo-2", "Automação Script Genérica", "A", "Marketing", "Ativo", "Média", "Revisar código", "C:\\Demo\\LaneA\\Projeto2", "Projeto demonstrativo"]
     );
     
     // 2 Focus Slots
@@ -33,20 +35,26 @@ export async function runDemoSeed(db: Database) {
     await db.execute(
       `INSERT INTO weekly_priorities (id, week_start, position, title, project_id, done, created_at, updated_at) 
        VALUES ($1, $2, $3, $4, $5, 0, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET title=excluded.title, project_id=excluded.project_id, updated_at=datetime('now')`,
-      ["prio-1", "2026-07-13", 1, "Concluir Setup Inicial", "proj-demo-1"]
+       ON CONFLICT(id) DO UPDATE SET
+         week_start=excluded.week_start, position=excluded.position, title=excluded.title,
+         project_id=excluded.project_id, done=excluded.done, updated_at=datetime('now')`,
+      ["prio-1", currentWeek, 1, "Concluir Setup Inicial", "proj-demo-1"]
     );
     await db.execute(
       `INSERT INTO weekly_priorities (id, week_start, position, title, project_id, done, created_at, updated_at) 
        VALUES ($1, $2, $3, $4, $5, 0, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET title=excluded.title, project_id=excluded.project_id, updated_at=datetime('now')`,
-      ["prio-2", "2026-07-13", 2, "Testar Funcionalidade", "proj-demo-2"]
+       ON CONFLICT(id) DO UPDATE SET
+         week_start=excluded.week_start, position=excluded.position, title=excluded.title,
+         project_id=excluded.project_id, done=excluded.done, updated_at=datetime('now')`,
+      ["prio-2", currentWeek, 2, "Testar Funcionalidade", "proj-demo-2"]
     );
     await db.execute(
       `INSERT INTO weekly_priorities (id, week_start, position, title, project_id, done, created_at, updated_at) 
        VALUES ($1, $2, $3, $4, $5, 0, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET title=excluded.title, project_id=excluded.project_id, updated_at=datetime('now')`,
-      ["prio-3", "2026-07-13", 3, "Treino Idiomas", null]
+       ON CONFLICT(id) DO UPDATE SET
+         week_start=excluded.week_start, position=excluded.position, title=excluded.title,
+         project_id=excluded.project_id, done=excluded.done, updated_at=datetime('now')`,
+      ["prio-3", currentWeek, 3, "Treino Idiomas", null]
     );
 
     // 2 Courses
@@ -98,10 +106,8 @@ export async function runDemoSeed(db: Database) {
     );
 
     await db.execute('COMMIT');
-    console.log("Demo dataset seeded successfully!");
   } catch (error) {
     await db.execute('ROLLBACK');
-    console.error("Failed to seed demo data:", error);
-    throw error; // Don't hide the error
+    throw error;
   }
 }
