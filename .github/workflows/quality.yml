@@ -51,6 +51,10 @@ jobs:
         working-directory: src-tauri
         run: cargo +stable-x86_64-pc-windows-msvc clippy --locked -- -D warnings
 
+      - name: Test native security policy
+        working-directory: src-tauri
+        run: cargo +stable-x86_64-pc-windows-msvc test --locked -p focus-cockpit-security-policy
+
       - name: Test SQLite migrations and invariants
         working-directory: src-tauri/migration-tests
         run: cargo +stable-x86_64-pc-windows-msvc test --locked

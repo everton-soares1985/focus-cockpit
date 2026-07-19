@@ -121,6 +121,7 @@ pnpm check
 Set-Location src-tauri
 cargo fmt --check
 cargo clippy --locked -- -D warnings
+cargo test --locked -p focus-cockpit-security-policy
 
 Set-Location migration-tests
 cargo test --locked

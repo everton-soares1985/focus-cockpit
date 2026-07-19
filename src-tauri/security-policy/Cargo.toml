@@ -1,0 +1,8 @@
+[package]
+name = "focus-cockpit-security-policy"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+infer = "0.19"

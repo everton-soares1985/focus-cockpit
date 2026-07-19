@@ -1,10 +1,11 @@
+use focus_cockpit_security_policy::is_safe_backup_entry;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
     fs::{self, File},
     io::{Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
@@ -297,26 +298,6 @@ fn zip_state(
     })
 }
 
-fn valid_archive_path(path: &str) -> bool {
-    let candidate = Path::new(path);
-    if candidate.is_absolute()
-        || candidate
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
-    {
-        return false;
-    }
-    if path == "painel.sqlite3" || path == "manifest.json" {
-        return true;
-    }
-    let components: Vec<_> = candidate.components().collect();
-    components.len() == 2
-        && matches!(
-            components.first(),
-            Some(Component::Normal(name)) if *name == "credentials" || *name == "thumbnails"
-        )
-}
-
 fn validate_archive(path: &Path) -> Result<(BackupManifest, BackupSummary), BackupError> {
     let input = File::open(path).map_err(|_| {
         BackupError::new(
@@ -340,7 +321,7 @@ fn validate_archive(path: &Path) -> Result<(BackupManifest, BackupSummary), Back
             BackupError::new("invalid_backup", "Uma entrada do backup está corrompida.")
         })?;
         let name = entry.name().to_owned();
-        if !valid_archive_path(&name) || !names.insert(name) || entry.is_dir() {
+        if !is_safe_backup_entry(&name) || !names.insert(name) || entry.is_dir() {
             return Err(BackupError::new(
                 "unsafe_backup_layout",
                 "O backup contém caminhos inválidos ou repetidos.",
@@ -389,7 +370,7 @@ fn validate_archive(path: &Path) -> Result<(BackupManifest, BackupSummary), Back
     let mut total_bytes = 0_u64;
     let mut manifest_names = HashSet::new();
     for expected in &manifest.files {
-        if !valid_archive_path(&expected.path)
+        if !is_safe_backup_entry(&expected.path)
             || expected.path == "manifest.json"
             || !manifest_names.insert(expected.path.clone())
         {

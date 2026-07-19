@@ -1,9 +1,6 @@
+use focus_cockpit_security_policy::has_blocked_target_extension;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-
-const BLOCKED_EXTENSIONS: [&str; 10] = [
-    "exe", "msi", "bat", "cmd", "ps1", "vbs", "js", "jar", "scr", "com",
-];
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -33,17 +30,6 @@ impl NativeFileError {
             message: message.into(),
         }
     }
-}
-
-fn has_blocked_extension(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .map(|extension| {
-            BLOCKED_EXTENSIONS
-                .iter()
-                .any(|blocked| extension.eq_ignore_ascii_case(blocked))
-        })
-        .unwrap_or(false)
 }
 
 fn canonical_target(path: &str, target_type: &TargetType) -> Result<PathBuf, NativeFileError> {
@@ -77,7 +63,7 @@ fn canonical_target(path: &str, target_type: &TargetType) -> Result<PathBuf, Nat
         _ => {}
     }
 
-    if matches!(target_type, TargetType::File) && has_blocked_extension(&canonical) {
+    if matches!(target_type, TargetType::File) && has_blocked_target_extension(&canonical) {
         return Err(NativeFileError::new(
             "blocked_extension",
             "Esse tipo de arquivo não pode ser aberto pelo Focus Cockpit.",
@@ -99,7 +85,8 @@ pub fn inspect_saved_target(path: String, target_type: TargetType) -> SavedTarge
             TargetType::Folder => metadata.is_dir(),
         })
         .unwrap_or(false);
-    let blocked = matches!(target_type, TargetType::File) && has_blocked_extension(&requested);
+    let blocked =
+        matches!(target_type, TargetType::File) && has_blocked_target_extension(&requested);
 
     SavedTargetStatus {
         exists,

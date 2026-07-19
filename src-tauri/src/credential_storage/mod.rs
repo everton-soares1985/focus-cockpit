@@ -1,3 +1,6 @@
+use focus_cockpit_security_policy::{
+    validate_credential_file, CredentialPolicyError, CredentialValidation,
+};
 use serde::Serialize;
 use std::{
     fs,
@@ -45,16 +48,6 @@ fn storage_root(app: &AppHandle) -> Result<PathBuf, CredentialStorageError> {
         })
 }
 
-fn supported_mime(extension: &str) -> Option<&'static str> {
-    match extension {
-        "pdf" => Some("application/pdf"),
-        "png" => Some("image/png"),
-        "jpg" | "jpeg" => Some("image/jpeg"),
-        "webp" => Some("image/webp"),
-        _ => None,
-    }
-}
-
 fn canonical_source(source_path: &str) -> Result<PathBuf, CredentialStorageError> {
     let source = PathBuf::from(source_path).canonicalize().map_err(|_| {
         CredentialStorageError::new(
@@ -72,53 +65,33 @@ fn canonical_source(source_path: &str) -> Result<PathBuf, CredentialStorageError
 }
 
 fn validated_file(source: &Path) -> Result<(String, &'static str, u64), CredentialStorageError> {
-    let metadata = source.metadata().map_err(|_| {
-        CredentialStorageError::new(
+    let CredentialValidation {
+        extension,
+        mime_type,
+        size_bytes,
+    } = validate_credential_file(source, MAX_CREDENTIAL_BYTES).map_err(|error| match error {
+        CredentialPolicyError::MetadataUnavailable
+        | CredentialPolicyError::ContentDetectionFailed => CredentialStorageError::new(
             "source_unavailable",
-            "O diploma existe, mas não pôde ser lido.",
-        )
-    })?;
-    if metadata.len() == 0 || metadata.len() > MAX_CREDENTIAL_BYTES {
-        return Err(CredentialStorageError::new(
-            "invalid_size",
-            "O arquivo deve ter entre 1 byte e 25 MB.",
-        ));
-    }
-
-    let extension = source
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(str::to_ascii_lowercase)
-        .and_then(|value| supported_mime(&value).map(|mime| (value, mime)))
-        .ok_or_else(|| {
-            CredentialStorageError::new(
-                "unsupported_extension",
-                "Use um arquivo PDF, PNG, JPG, JPEG ou WebP.",
-            )
-        })?;
-
-    let detected = infer::get_from_path(source)
-        .map_err(|_| {
-            CredentialStorageError::new(
-                "source_unavailable",
-                "O conteúdo do diploma não pôde ser verificado.",
-            )
-        })?
-        .ok_or_else(|| {
-            CredentialStorageError::new(
-                "unknown_file_type",
-                "O conteúdo do arquivo não corresponde a um formato permitido.",
-            )
-        })?;
-
-    if detected.mime_type() != extension.1 {
-        return Err(CredentialStorageError::new(
+            "O conteúdo do diploma não pôde ser verificado.",
+        ),
+        CredentialPolicyError::InvalidSize => {
+            CredentialStorageError::new("invalid_size", "O arquivo deve ter entre 1 byte e 25 MB.")
+        }
+        CredentialPolicyError::UnsupportedExtension => CredentialStorageError::new(
+            "unsupported_extension",
+            "Use um arquivo PDF, PNG, JPG, JPEG ou WebP.",
+        ),
+        CredentialPolicyError::UnknownFileType => CredentialStorageError::new(
+            "unknown_file_type",
+            "O conteúdo do arquivo não corresponde a um formato permitido.",
+        ),
+        CredentialPolicyError::MimeMismatch => CredentialStorageError::new(
             "mime_mismatch",
             "A extensão e o conteúdo do arquivo não correspondem.",
-        ));
-    }
-
-    Ok((extension.0, extension.1, metadata.len()))
+        ),
+    })?;
+    Ok((extension, mime_type, size_bytes))
 }
 
 fn canonical_managed_path(
