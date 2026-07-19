@@ -1,173 +1,244 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { FolderSearch } from 'lucide-react';
 import { useCreateProject, useUpdateProject } from './projectHooks';
-import { laneSchema, projectStatusSchema, prioritySchema, type Project, type ProjectDraftInput } from './projectSchema';
+import {
+  laneSchema,
+  prioritySchema,
+  projectStatusSchema,
+  type Project,
+  type ProjectDraftInput,
+} from './projectSchema';
 import { Button } from '../design-system/components/Button';
-import { Modal } from '../design-system/components/Modal';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 import { Input } from '../design-system/components/Input';
+import { Modal } from '../design-system/components/Modal';
 import { Select } from '../design-system/components/Select';
 import { Textarea } from '../design-system/components/Textarea';
 
+function initialProjectDraft(project: Project | null): ProjectDraftInput {
+  if (!project) {
+    return {
+      name: '',
+      lane: 'A',
+      area: '',
+      status: 'Ativo',
+      priority: null,
+      nextAction: '',
+      lastProgress: '',
+      folderPath: '',
+      notes: '',
+    };
+  }
+  return {
+    name: project.name,
+    lane: project.lane,
+    area: project.area ?? '',
+    status: project.status,
+    priority: project.priority,
+    nextAction: project.nextAction ?? '',
+    lastProgress: project.lastProgress ?? '',
+    folderPath: project.folderPath ?? '',
+    notes: project.notes ?? '',
+  };
+}
+
 export function ProjectModal({
-  isOpen,
   onClose,
   projectToEdit,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   projectToEdit: Project | null;
 }) {
-  const isEditing = !!projectToEdit;
-
+  const isEditing = Boolean(projectToEdit);
   const createMutation = useCreateProject();
   const updateMutation = useUpdateProject();
+  const [formData, setFormData] = useState<ProjectDraftInput>(() =>
+    initialProjectDraft(projectToEdit),
+  );
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<ProjectDraftInput>({
-    name: '',
-    lane: 'A',
-    area: '',
-    status: 'Ativo',
-    priority: null,
-    nextAction: '',
-    lastProgress: '',
-    folderPath: '',
-    notes: '',
-  });
-
-  useEffect(() => {
-    if (isOpen) {
-      if (projectToEdit) {
-        setFormData({
-          name: projectToEdit.name,
-          lane: projectToEdit.lane,
-          area: projectToEdit.area || '',
-          status: projectToEdit.status,
-          priority: projectToEdit.priority,
-          nextAction: projectToEdit.nextAction || '',
-          lastProgress: projectToEdit.lastProgress || '',
-          folderPath: projectToEdit.folderPath || '',
-          notes: projectToEdit.notes || '',
-        });
-      } else {
-        setFormData({
-          name: '',
-          lane: 'A',
-          area: '',
-          status: 'Ativo',
-          priority: null,
-          nextAction: '',
-          lastProgress: '',
-          folderPath: '',
-          notes: '',
-        });
-      }
-    }
-  }, [isOpen, projectToEdit]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBrowseFolder = async () => {
     try {
-      const payload = {
-        ...formData,
-        area: formData.area?.trim() || null,
-        nextAction: formData.nextAction?.trim() || null,
-        lastProgress: formData.lastProgress?.trim() || null,
-        folderPath: formData.folderPath?.trim() || null,
-        notes: formData.notes?.trim() || null,
-      };
+      setError(null);
+      const selected = await open({ directory: true, multiple: false });
+      if (selected && !Array.isArray(selected)) {
+        setFormData((current) => ({ ...current, folderPath: selected }));
+      }
+    } catch (browseError: unknown) {
+      setError(getErrorMessage(browseError, 'Não foi possível selecionar a pasta.'));
+    }
+  };
 
-      if (isEditing) {
-        await updateMutation.mutateAsync({ id: projectToEdit.id, input: payload as any });
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      setError(null);
+      if (projectToEdit) {
+        await updateMutation.mutateAsync({ id: projectToEdit.id, input: formData });
       } else {
-        await createMutation.mutateAsync(payload as any);
+        await createMutation.mutateAsync(formData);
       }
       onClose();
-    } catch (error: any) {
-      alert(`Erro ao salvar: ${error.message}`);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível salvar o projeto.'));
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Projeto' : 'Novo Projeto'} className="max-w-2xl">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={isEditing ? 'Editar projeto' : 'Novo projeto'}
+      className="max-w-2xl"
+    >
       <form onSubmit={handleSubmit} className="space-y-5">
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Nome do Projeto</label>
-            <Input 
-              value={formData.name} 
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
+            <label htmlFor="project-name" className="mb-1.5 block text-sm font-medium text-text-muted">
+              Nome do projeto
+            </label>
+            <Input
+              id="project-name"
+              value={formData.name}
+              onChange={(event) => setFormData({ ...formData, name: event.target.value })}
               required
               autoFocus
+              maxLength={120}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Lane</label>
-            <Select 
-              value={formData.lane} 
-              onChange={e => setFormData({ ...formData, lane: e.target.value as any })}
+            <label htmlFor="project-lane" className="mb-1.5 block text-sm font-medium text-text-muted">Lane</label>
+            <Select
+              id="project-lane"
+              value={formData.lane}
+              onChange={(event) =>
+                setFormData({
+                  ...formData,
+                  lane: event.target.value as ProjectDraftInput['lane'],
+                })
+              }
             >
-              {laneSchema.options.map(opt => <option key={opt} value={opt}>LANE {opt}</option>)}
+              {laneSchema.options.map((option) => (
+                <option key={option} value={option}>Lane {option}</option>
+              ))}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Área (Opcional)</label>
-            <Input 
-              value={formData.area || ''} 
-              onChange={e => setFormData({ ...formData, area: e.target.value })}
-              placeholder="Ex: Operacional, Marketing..."
+            <label htmlFor="project-area" className="mb-1.5 block text-sm font-medium text-text-muted">Área</label>
+            <Input
+              id="project-area"
+              value={formData.area ?? ''}
+              onChange={(event) => setFormData({ ...formData, area: event.target.value })}
+              placeholder="Ex.: Portfólio, carreira, estudos"
+              maxLength={80}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Status</label>
-            <Select 
-              value={formData.status} 
-              onChange={e => setFormData({ ...formData, status: e.target.value as any })}
+            <label htmlFor="project-status" className="mb-1.5 block text-sm font-medium text-text-muted">Status</label>
+            <Select
+              id="project-status"
+              value={formData.status}
+              onChange={(event) =>
+                setFormData({
+                  ...formData,
+                  status: event.target.value as ProjectDraftInput['status'],
+                })
+              }
             >
-              {projectStatusSchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {projectStatusSchema.options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Prioridade</label>
-            <Select 
-              value={formData.priority || ''} 
-              onChange={e => setFormData({ ...formData, priority: (e.target.value as any) || null })}
+            <label htmlFor="project-priority" className="mb-1.5 block text-sm font-medium text-text-muted">Prioridade</label>
+            <Select
+              id="project-priority"
+              value={formData.priority ?? ''}
+              onChange={(event) =>
+                setFormData({
+                  ...formData,
+                  priority: (event.target.value || null) as ProjectDraftInput['priority'],
+                })
+              }
             >
-              <option value="">(Nenhuma)</option>
-              {prioritySchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              <option value="">Sem prioridade</option>
+              {prioritySchema.options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </Select>
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Caminho da Pasta Local (Opcional)</label>
-            <Input 
-              value={formData.folderPath || ''} 
-              onChange={e => setFormData({ ...formData, folderPath: e.target.value })}
-              placeholder="C:\Caminho\Para\O\Projeto"
+            <label htmlFor="project-folder" className="mb-1.5 block text-sm font-medium text-text-muted">Pasta local</label>
+            <div className="flex gap-2">
+              <Input
+                id="project-folder"
+                value={formData.folderPath ?? ''}
+                onChange={(event) => setFormData({ ...formData, folderPath: event.target.value })}
+                placeholder="C:\\Caminho\\Projeto"
+                maxLength={1024}
+              />
+              <Button type="button" variant="secondary" onClick={handleBrowseFolder} className="gap-2">
+                <FolderSearch className="h-4 w-4" aria-hidden="true" /> Selecionar
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="project-next-action" className="mb-1.5 block text-sm font-medium text-text-muted">Próxima ação</label>
+            <Textarea
+              id="project-next-action"
+              value={formData.nextAction ?? ''}
+              onChange={(event) => setFormData({ ...formData, nextAction: event.target.value })}
+              rows={3}
+              maxLength={240}
             />
-            <p className="text-xs text-text-muted mt-1">Este caminho será usado para abrir a pasta diretamente pelo aplicativo.</p>
+          </div>
+
+          <div>
+            <label htmlFor="project-last-progress" className="mb-1.5 block text-sm font-medium text-text-muted">Último avanço</label>
+            <Textarea
+              id="project-last-progress"
+              value={formData.lastProgress ?? ''}
+              onChange={(event) => setFormData({ ...formData, lastProgress: event.target.value })}
+              rows={3}
+              maxLength={240}
+            />
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Próxima Ação</label>
-            <Textarea 
-              value={formData.nextAction || ''} 
-              onChange={e => setFormData({ ...formData, nextAction: e.target.value })}
-              rows={2}
+            <label htmlFor="project-notes" className="mb-1.5 block text-sm font-medium text-text-muted">Observações</label>
+            <Textarea
+              id="project-notes"
+              value={formData.notes ?? ''}
+              onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+              rows={3}
+              maxLength={4000}
             />
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+        <FeedbackMessage message={error} />
+
+        <div className="flex justify-end gap-3 border-t border-border pt-4">
           <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-            {isEditing ? 'Salvar Alterações' : 'Criar Projeto'}
+            {createMutation.isPending || updateMutation.isPending
+              ? 'Salvando...'
+              : isEditing
+                ? 'Salvar alterações'
+                : 'Criar projeto'}
           </Button>
         </div>
-        
       </form>
     </Modal>
   );

@@ -1,149 +1,168 @@
-import { useState, useEffect } from 'react';
-import { useImportCredential, useUpdateCredentialMetadata } from './credentialHooks';
+import { useState } from 'react';
 import { useCourses } from '../courses/courseHooks';
-import { credentialKindSchema, type Credential, type CredentialMetadataInput } from './credentialSchema';
+import { useImportCredential, useUpdateCredentialMetadata } from './credentialHooks';
+import {
+  credentialKindSchema,
+  type Credential,
+  type CredentialMetadataInput,
+} from './credentialSchema';
 import { Button } from '../design-system/components/Button';
-import { Modal } from '../design-system/components/Modal';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 import { Input } from '../design-system/components/Input';
+import { Modal } from '../design-system/components/Modal';
 import { Select } from '../design-system/components/Select';
 
+const kindLabels = {
+  certificate: 'Certificado',
+  diploma: 'Diploma',
+  badge: 'Badge',
+  other: 'Outro',
+} as const;
+
+function initialCredentialMetadata(
+  credential: Credential | null,
+  preferredCourseId?: string | null,
+): CredentialMetadataInput {
+  if (!credential) {
+    return {
+      title: '',
+      kind: 'certificate',
+      issuer: '',
+      courseId: preferredCourseId ?? null,
+      issuedOn: null,
+    };
+  }
+  return {
+    title: credential.title,
+    kind: credential.kind,
+    issuer: credential.issuer ?? '',
+    courseId: credential.courseId,
+    issuedOn: credential.issuedOn,
+  };
+}
+
 export function CredentialModal({
-  isOpen,
   onClose,
   credentialToEdit,
   importSourcePath,
+  preferredCourseId,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   credentialToEdit: Credential | null;
   importSourcePath: string | null;
+  preferredCourseId?: string | null;
 }) {
-  const isEditing = !!credentialToEdit;
-
+  const isEditing = Boolean(credentialToEdit);
   const importMutation = useImportCredential();
   const updateMutation = useUpdateCredentialMetadata();
   const { data: courses } = useCourses({ includeArchived: true });
+  const [formData, setFormData] = useState<CredentialMetadataInput>(() =>
+    initialCredentialMetadata(credentialToEdit, preferredCourseId),
+  );
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<CredentialMetadataInput>({
-    title: '',
-    kind: 'certificate',
-    issuer: '',
-    courseId: null,
-    issuedOn: null,
-  });
-
-  useEffect(() => {
-    if (isOpen) {
-      if (credentialToEdit) {
-        setFormData({
-          title: credentialToEdit.title,
-          kind: credentialToEdit.kind,
-          issuer: credentialToEdit.issuer || '',
-          courseId: credentialToEdit.courseId,
-          issuedOn: credentialToEdit.issuedOn,
-        });
-      } else {
-        setFormData({
-          title: '',
-          kind: 'certificate',
-          issuer: '',
-          courseId: null,
-          issuedOn: null,
-        });
-      }
-    }
-  }, [isOpen, credentialToEdit]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     try {
-      const payload = {
-        ...formData,
-        issuer: formData.issuer?.trim() || null,
-        courseId: formData.courseId || null,
-        issuedOn: formData.issuedOn || null,
-      };
-
-      if (isEditing) {
-        await updateMutation.mutateAsync({ id: credentialToEdit.id, input: payload as any });
+      setError(null);
+      if (credentialToEdit) {
+        await updateMutation.mutateAsync({ id: credentialToEdit.id, input: formData });
       } else if (importSourcePath) {
-        await importMutation.mutateAsync({ sourcePath: importSourcePath, metadata: payload as any });
+        await importMutation.mutateAsync({ sourcePath: importSourcePath, metadata: formData });
+      } else {
+        setError('Selecione um arquivo PDF ou uma imagem antes de continuar.');
+        return;
       }
       onClose();
-    } catch (error: any) {
-      alert(`Erro ao salvar diploma: ${error.message}`);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível salvar o diploma.'));
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Metadados' : 'Importar Novo Diploma'}>
+    <Modal isOpen onClose={onClose} title={isEditing ? 'Editar dados' : 'Importar diploma'}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        
         {importSourcePath && (
-          <div className="bg-surface-soft p-3 rounded-md border border-border-strong text-xs font-mono text-text-muted break-all mb-2">
-            Origem: {importSourcePath}
+          <div className="break-all rounded-md border border-border-strong bg-surface-soft p-3 font-mono text-xs text-text-muted">
+            Arquivo selecionado: {importSourcePath.split(/[\\/]/).pop()}
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1.5">Título do Certificado/Diploma</label>
-          <Input 
-            value={formData.title} 
-            onChange={e => setFormData({ ...formData, title: e.target.value })}
+          <label htmlFor="credential-title" className="mb-1.5 block text-sm font-medium text-text-muted">Título</label>
+          <Input
+            id="credential-title"
+            value={formData.title}
+            onChange={(event) => setFormData({ ...formData, title: event.target.value })}
             required
             autoFocus
+            maxLength={180}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1.5">Emissor / Instituição</label>
-          <Input 
-            value={formData.issuer || ''} 
-            onChange={e => setFormData({ ...formData, issuer: e.target.value })}
+          <label htmlFor="credential-issuer" className="mb-1.5 block text-sm font-medium text-text-muted">Emissor ou instituição</label>
+          <Input
+            id="credential-issuer"
+            value={formData.issuer ?? ''}
+            onChange={(event) => setFormData({ ...formData, issuer: event.target.value })}
+            maxLength={160}
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Tipo</label>
-            <Select 
-              value={formData.kind} 
-              onChange={e => setFormData({ ...formData, kind: e.target.value as any })}
+            <label htmlFor="credential-kind" className="mb-1.5 block text-sm font-medium text-text-muted">Tipo</label>
+            <Select
+              id="credential-kind"
+              value={formData.kind}
+              onChange={(event) => setFormData({ ...formData, kind: event.target.value as CredentialMetadataInput['kind'] })}
             >
-              {credentialKindSchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {credentialKindSchema.options.map((option) => (
+                <option key={option} value={option}>{kindLabels[option]}</option>
+              ))}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Data de Emissão</label>
-            <Input 
+            <label htmlFor="credential-date" className="mb-1.5 block text-sm font-medium text-text-muted">Data de emissão</label>
+            <Input
+              id="credential-date"
               type="date"
-              value={formData.issuedOn || ''} 
-              onChange={e => setFormData({ ...formData, issuedOn: e.target.value })}
+              value={formData.issuedOn ?? ''}
+              onChange={(event) => setFormData({ ...formData, issuedOn: event.target.value })}
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1.5">Vincular a um Curso (Opcional)</label>
-          <Select 
-            value={formData.courseId || ''} 
-            onChange={e => setFormData({ ...formData, courseId: e.target.value || null })}
+          <label htmlFor="credential-course" className="mb-1.5 block text-sm font-medium text-text-muted">Curso vinculado</label>
+          <Select
+            id="credential-course"
+            value={formData.courseId ?? ''}
+            onChange={(event) => setFormData({ ...formData, courseId: event.target.value || null })}
           >
-            <option value="">(Nenhum)</option>
-            {courses?.map(c => (
-              <option key={c.id} value={c.id}>{c.title}</option>
+            <option value="">Nenhum curso</option>
+            {courses?.map((course) => (
+              <option key={course.id} value={course.id}>{course.title}</option>
             ))}
           </Select>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+        <FeedbackMessage message={error} />
+        <div className="flex justify-end gap-3 border-t border-border pt-4">
           <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button type="submit" disabled={importMutation.isPending || updateMutation.isPending}>
-            {isEditing ? 'Salvar Alterações' : 'Importar Arquivo'}
+            {importMutation.isPending || updateMutation.isPending
+              ? 'Salvando...'
+              : isEditing
+                ? 'Salvar alterações'
+                : 'Importar arquivo'}
           </Button>
         </div>
-        
       </form>
     </Modal>
   );

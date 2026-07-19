@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Target, Pencil, Trash2 } from 'lucide-react';
 import { 
   useWeeklyPriorities, 
@@ -13,7 +13,12 @@ import { Checkbox } from '../design-system/components/Checkbox';
 import { Modal } from '../design-system/components/Modal';
 import { Input } from '../design-system/components/Input';
 import { Select } from '../design-system/components/Select';
-import type { WeeklyPrioritySlot } from './focusSchema';
+import { ConfirmDialog } from '../design-system/components/ConfirmDialog';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
+import type { WeeklyPriority, WeeklyPrioritySlot } from './focusSchema';
 
 export function WeeklyPriorityBlock() {
   const weekStart = getWeekStart();
@@ -58,12 +63,15 @@ export function WeeklyPriorityBlock() {
         ))}
       </div>
 
-      <EditPriorityModal 
-        position={editingPosition} 
-        weekStart={weekStart}
-        currentPriority={editingPosition ? safeSlots.find(s => s.position === editingPosition)?.priority || null : null}
-        onClose={() => setEditingPosition(null)} 
-      />
+      {editingPosition !== null && (
+        <EditPriorityModal
+          key={`${editingPosition}-${safeSlots.find((slot) => slot.position === editingPosition)?.priority?.id ?? 'empty'}`}
+          position={editingPosition}
+          weekStart={weekStart}
+          currentPriority={safeSlots.find((slot) => slot.position === editingPosition)?.priority ?? null}
+          onClose={() => setEditingPosition(null)}
+        />
+      )}
     </div>
   );
 }
@@ -79,24 +87,35 @@ function PriorityItem({
 }) {
   const toggleMutation = useToggleWeeklyPriority();
   const clearMutation = useClearWeeklyPriority();
+  const [isClearConfirming, setIsClearConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleToggle = (checked: boolean) => {
+  const handleToggle = async (checked: boolean) => {
     if (slot.priority) {
-      toggleMutation.mutate({ id: slot.priority.id, done: checked });
+      try {
+        setError(null);
+        await toggleMutation.mutateAsync({ id: slot.priority.id, done: checked });
+      } catch (toggleError: unknown) {
+        setError(getErrorMessage(toggleError, 'Não foi possível atualizar a prioridade.'));
+      }
     }
   };
 
-  const handleClear = () => {
-    if (confirm('Deseja limpar esta prioridade?')) {
-      clearMutation.mutate({ weekStart, position: slot.position as 1 | 2 | 3 });
+  const handleClear = async () => {
+    try {
+      setError(null);
+      await clearMutation.mutateAsync({ weekStart, position: slot.position });
+      setIsClearConfirming(false);
+    } catch (clearError: unknown) {
+      setError(getErrorMessage(clearError, 'Não foi possível limpar a prioridade.'));
     }
   };
 
   if (!slot.priority) {
     return (
-      <div className="flex items-center justify-between p-3 rounded-lg border border-dashed border-border bg-surface-soft/50 group">
+      <div className="group flex items-center justify-between rounded-lg border border-dashed border-border bg-surface-soft/50 p-3 focus-within:border-border-strong">
         <span className="text-sm text-text-muted italic">Slot {slot.position} vazio</span>
-        <Button variant="ghost" size="sm" onClick={onEdit} className="opacity-0 group-hover:opacity-100 h-7 text-xs">
+        <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 text-xs opacity-70 group-hover:opacity-100 group-focus-within:opacity-100">
           Definir
         </Button>
       </div>
@@ -106,7 +125,8 @@ function PriorityItem({
   const p = slot.priority;
 
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${p.done ? 'border-success/30 bg-success/5' : 'border-border bg-surface-raised'} group`}>
+    <div className={`group rounded-lg border p-3 transition-colors focus-within:border-border-strong ${p.done ? 'border-success/30 bg-success/5' : 'border-border bg-surface-raised'}`}>
+      <div className="flex items-start gap-3">
       <div className="pt-0.5">
         <Checkbox 
           checked={p.done} 
@@ -123,14 +143,25 @@ function PriorityItem({
           </p>
         )}
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className="flex shrink-0 items-center gap-1 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7">
           <Pencil className="h-3.5 w-3.5 text-text-muted" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={handleClear} className="h-7 w-7 hover:text-danger">
+        <Button variant="ghost" size="icon" onClick={() => setIsClearConfirming(true)} className="h-7 w-7 hover:text-danger" aria-label="Limpar prioridade" title="Limpar prioridade">
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+      </div>
+      <FeedbackMessage message={error} className="mt-2" />
+      <ConfirmDialog
+        isOpen={isClearConfirming}
+        title="Limpar prioridade"
+        description={`A prioridade “${p.title}” será removida desta semana.`}
+        confirmLabel="Limpar prioridade"
+        isPending={clearMutation.isPending}
+        onCancel={() => setIsClearConfirming(false)}
+        onConfirm={handleClear}
+      />
     </div>
   );
 }
@@ -141,40 +172,38 @@ function EditPriorityModal({
   currentPriority,
   onClose 
 }: { 
-  position: 1 | 2 | 3 | null; 
+  position: 1 | 2 | 3;
   weekStart: string;
-  currentPriority: any;
+  currentPriority: WeeklyPriority | null;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(currentPriority?.title || '');
   const [projectId, setProjectId] = useState(currentPriority?.projectId || '');
   const { data: projects } = useProjects({ status: 'Ativo', includeArchived: false });
   const saveMutation = useSaveWeeklyPriority();
-
-  // Reset state when modal opens with new data
-  useEffect(() => {
-    if (position !== null) {
-      setTitle(currentPriority?.title || '');
-      setProjectId(currentPriority?.projectId || '');
-    }
-  }, [position, currentPriority]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!position || !title.trim()) return;
     
-    await saveMutation.mutateAsync({
-      weekStart,
-      position,
-      title: title.trim(),
-      projectId: projectId || null,
-      done: currentPriority?.done || false
-    });
-    onClose();
+    try {
+      setError(null);
+      await saveMutation.mutateAsync({
+        weekStart,
+        position,
+        title: title.trim(),
+        projectId: projectId || null,
+        done: currentPriority?.done || false,
+      });
+      onClose();
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível salvar a prioridade.'));
+    }
   };
 
   return (
-    <Modal isOpen={position !== null} onClose={onClose} title={`Prioridade ${position} da Semana`}>
+    <Modal isOpen onClose={onClose} title={`Prioridade ${position} da semana`}>
       <form onSubmit={handleSave} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-text-muted mb-1.5">O que precisa ser feito?</label>
@@ -187,6 +216,7 @@ function EditPriorityModal({
             maxLength={180}
           />
         </div>
+        <FeedbackMessage message={error} />
         <div>
           <label className="block text-sm font-medium text-text-muted mb-1.5">Vincular a projeto (opcional)</label>
           <Select 

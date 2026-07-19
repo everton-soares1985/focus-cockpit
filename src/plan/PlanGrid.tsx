@@ -1,4 +1,9 @@
-import { planCategorySchema, periodIndex, type PlanItem, type PlanCategory } from './planSchema';
+import {
+  periodIndex,
+  planCategorySchema,
+  type PlanCategory,
+  type PlanItem,
+} from './planSchema';
 
 interface PlanGridProps {
   items: PlanItem[];
@@ -7,123 +12,128 @@ interface PlanGridProps {
   onEditItem: (item: PlanItem) => void;
 }
 
+export interface PositionedPlanItem {
+  item: PlanItem;
+  startIndex: number;
+  endIndex: number;
+  track: number;
+}
+
+export function layoutPlanItems(
+  items: PlanItem[],
+  firstVisibleYear: number,
+  totalSemesters: number,
+): PositionedPlanItem[] {
+  const visible = items
+    .map((item) => ({
+      item,
+      startIndex: Math.max(0, periodIndex(item.startYear, item.startSemester, firstVisibleYear)),
+      endIndex: Math.min(
+        totalSemesters - 1,
+        periodIndex(item.endYear, item.endSemester, firstVisibleYear),
+      ),
+    }))
+    .filter(({ item }) => {
+      const rawStart = periodIndex(item.startYear, item.startSemester, firstVisibleYear);
+      const rawEnd = periodIndex(item.endYear, item.endSemester, firstVisibleYear);
+      return rawEnd >= 0 && rawStart < totalSemesters;
+    })
+    .sort((left, right) => left.startIndex - right.startIndex || left.endIndex - right.endIndex || left.item.sortOrder - right.item.sortOrder);
+
+  const trackEnds: number[] = [];
+  return visible.map((positioned) => {
+    let track = trackEnds.findIndex((endIndex) => positioned.startIndex > endIndex);
+    if (track === -1) track = trackEnds.length;
+    trackEnds[track] = positioned.endIndex;
+    return { ...positioned, track };
+  });
+}
+
 export function PlanGrid({ items, firstVisibleYear, totalYears, onEditItem }: PlanGridProps) {
   const categories: PlanCategory[] = planCategorySchema.options;
-  
-  const years = Array.from({ length: totalYears }, (_, i) => firstVisibleYear + i);
+  const years = Array.from({ length: totalYears }, (_, index) => firstVisibleYear + index);
   const totalSemesters = totalYears * 2;
-
-  // Render variables
   const cellWidth = 120;
   const categoryWidth = 180;
-  
+  const trackHeight = 46;
+
   return (
-    <div className="flex-1 overflow-auto relative">
-      <div 
-        style={{ 
-          minWidth: `${categoryWidth + (totalSemesters * cellWidth)}px` 
-        }}
+    <div className="relative flex-1 overflow-auto">
+      <div
+        style={{ minWidth: `${categoryWidth + totalSemesters * cellWidth}px` }}
         className="w-full"
       >
-        {/* Header - Sticky Top */}
-        <div className="sticky top-0 z-20 flex bg-surface-raised border-b border-border shadow-sm">
-          {/* Top-Left Corner - Sticky Both */}
-          <div 
-            className="sticky left-0 z-30 bg-surface-raised border-r border-border flex items-center px-4 font-semibold text-text-muted text-xs uppercase tracking-wider"
-            style={{ width: `${categoryWidth}px`, minWidth: `${categoryWidth}px` }}
+        <div className="sticky top-0 z-20 flex border-b border-border bg-surface-raised shadow-sm">
+          <div
+            className="sticky left-0 z-30 flex items-center border-r border-border bg-surface-raised px-4 text-xs font-semibold uppercase tracking-wider text-text-muted"
+            style={{ width: categoryWidth, minWidth: categoryWidth }}
           >
             Categoria
           </div>
-          
-          {/* Years Header */}
           <div className="flex">
-            {years.map(year => (
-              <div 
-                key={year} 
-                className="flex flex-col border-r border-border last:border-r-0"
-                style={{ width: `${cellWidth * 2}px` }}
-              >
-                <div className="text-center py-2 text-sm font-semibold text-text border-b border-border bg-surface-soft/50">
-                  {year}
-                </div>
+            {years.map((year) => (
+              <div key={year} className="flex flex-col border-r border-border last:border-r-0" style={{ width: cellWidth * 2 }}>
+                <div className="border-b border-border bg-surface-soft/50 py-2 text-center text-sm font-semibold text-text">{year}</div>
                 <div className="flex">
-                  <div className="flex-1 text-center py-1.5 text-xs text-text-muted border-r border-border">1º Sem</div>
-                  <div className="flex-1 text-center py-1.5 text-xs text-text-muted">2º Sem</div>
+                  <div className="flex-1 border-r border-border py-1.5 text-center text-xs text-text-muted">1º sem.</div>
+                  <div className="flex-1 py-1.5 text-center text-xs text-text-muted">2º sem.</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Body */}
         <div className="flex flex-col">
           {categories.map((category) => {
-            const categoryItems = items.filter(i => i.category === category);
-            
+            const positionedItems = layoutPlanItems(
+              items.filter((item) => item.category === category),
+              firstVisibleYear,
+              totalSemesters,
+            );
+            const trackCount = Math.max(1, ...positionedItems.map((item) => item.track + 1));
+            const rowHeight = Math.max(60, trackCount * trackHeight + 8);
+
             return (
-              <div key={category} className="flex border-b border-border last:border-b-0 min-h-[60px]">
-                {/* Row Header - Sticky Left */}
-                <div 
-                  className="sticky left-0 z-10 bg-surface flex items-center px-4 text-sm font-medium text-text-muted border-r border-border"
-                  style={{ width: `${categoryWidth}px`, minWidth: `${categoryWidth}px` }}
+              <div key={category} className="flex border-b border-border last:border-b-0" style={{ minHeight: rowHeight }}>
+                <div
+                  className="sticky left-0 z-10 flex items-center border-r border-border bg-surface px-4 text-sm font-medium text-text-muted"
+                  style={{ width: categoryWidth, minWidth: categoryWidth }}
                 >
                   {category}
                 </div>
-                
-                {/* Row Cells Background Grid */}
-                <div className="flex relative" style={{ width: `${totalSemesters * cellWidth}px` }}>
-                  {Array.from({ length: totalSemesters }).map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="border-r border-border/30 last:border-r-0 h-full"
-                      style={{ width: `${cellWidth}px` }}
-                    />
+
+                <div className="relative flex" style={{ width: totalSemesters * cellWidth }}>
+                  {Array.from({ length: totalSemesters }).map((_, index) => (
+                    <div key={index} className="h-full border-r border-border/30 last:border-r-0" style={{ width: cellWidth }} />
                   ))}
-                  
-                  {/* Items absolute positioned */}
-                  {categoryItems.map(item => {
-                    const startIdx = periodIndex(item.startYear, item.startSemester, firstVisibleYear);
-                    const endIdx = periodIndex(item.endYear, item.endSemester, firstVisibleYear);
-                    
-                    // Filter out items that are completely outside the visible window
-                    if (endIdx < 0 || startIdx >= totalSemesters) return null;
-                    
-                    const safeStart = Math.max(0, startIdx);
-                    const safeEnd = Math.min(totalSemesters - 1, endIdx);
-                    const colSpan = safeEnd - safeStart + 1;
-                    
-                    const leftPos = safeStart * cellWidth;
-                    const width = colSpan * cellWidth;
 
+                  {positionedItems.map(({ item, startIndex, endIndex, track }) => {
+                    const width = (endIndex - startIndex + 1) * cellWidth;
                     const isDone = item.status === 'Concluído';
-                    
-                    const defaultColor = item.color || '#28d7f0'; // fallback lane A color
-
+                    const color = item.color || '#28d7f0';
                     return (
-                      <div 
+                      <button
                         key={item.id}
+                        type="button"
                         onClick={() => onEditItem(item)}
-                        className={`absolute top-2 bottom-2 rounded-md border border-border/20 shadow-sm cursor-pointer p-2 overflow-hidden transition-transform hover:-translate-y-0.5 hover:shadow-md group`}
-                        style={{ 
-                          left: `${leftPos + 4}px`, 
-                          width: `${width - 8}px`,
-                          backgroundColor: isDone ? 'var(--color-surface-soft)' : `${defaultColor}20`,
-                          borderColor: isDone ? 'var(--color-border)' : `${defaultColor}60`,
+                        className="absolute overflow-hidden rounded-md border p-2 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lane-a"
+                        style={{
+                          left: startIndex * cellWidth + 4,
+                          top: track * trackHeight + 4,
+                          width: width - 8,
+                          height: trackHeight - 8,
+                          backgroundColor: isDone ? 'var(--color-surface-soft)' : `${color}20`,
+                          borderColor: isDone ? 'var(--color-border)' : `${color}60`,
                         }}
                         title={`${item.title}\nStatus: ${item.status}`}
                       >
-                        <div 
-                          className={`text-xs font-semibold truncate ${isDone ? 'text-text-muted' : ''}`}
-                          style={{ color: isDone ? undefined : defaultColor }}
-                        >
+                        <span className={`block truncate text-xs font-semibold ${isDone ? 'text-text-muted' : ''}`} style={{ color: isDone ? undefined : color }}>
                           {item.title}
-                        </div>
-                        {item.status && (
-                          <div className="text-[10px] opacity-70 truncate mt-0.5" style={{ color: isDone ? 'var(--color-text-muted)' : defaultColor }}>
-                            {item.status}
-                          </div>
-                        )}
-                      </div>
+                        </span>
+                        <span className="mt-0.5 block truncate text-[10px] opacity-70" style={{ color: isDone ? 'var(--color-text-muted)' : color }}>
+                          {item.status}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>

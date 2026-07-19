@@ -8,7 +8,7 @@ It is a personal productivity tool and a public portfolio project. The product r
 
 ## Development status
 
-The native foundation and domain layer are implemented. The final visual interface is currently being integrated on top of the stable contracts.
+Version `0.1.0` is a functional Windows release candidate. The native shell, local data layer, and the six-screen visual interface are integrated and exercised through the packaged executable.
 
 - Local SQLite schema and versioned migrations
 - Lane A / Lane B focus selection
@@ -20,7 +20,19 @@ The native foundation and domain layer are implemented. The final visual interfa
 - Unit, repository, migration, and invariant tests
 - Windows NSIS installer configuration
 
-No production release has been published yet.
+The installer is built locally and the source is ready for public portfolio review. A tagged GitHub release has not been published yet.
+
+## Interface
+
+All screenshots use fictional demonstration data. Missing example paths are intentionally identified and disabled by the native safety layer.
+
+| Focus cockpit | Career plan |
+| --- | --- |
+| ![Focus cockpit](docs/screenshots/final-01-focus.png) | ![Career plan](docs/screenshots/final-02-plan.png) |
+| Projects | Courses |
+| ![Projects](docs/screenshots/final-03-projects.png) | ![Courses](docs/screenshots/final-04-courses.png) |
+| Credentials | File locator |
+| ![Credentials](docs/screenshots/final-05-credentials.png) | ![File locator](docs/screenshots/final-06-files.png) |
 
 ## Product boundaries
 

@@ -1,208 +1,216 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useCreatePlanItem, useUpdatePlanItem } from './planHooks';
-import { planCategorySchema, planStatusSchema, type PlanItem, type PlanItemDraftInput } from './planSchema';
+import {
+  planCategorySchema,
+  planStatusSchema,
+  type PlanItem,
+  type PlanItemDraftInput,
+} from './planSchema';
 import { Button } from '../design-system/components/Button';
-import { Modal } from '../design-system/components/Modal';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 import { Input } from '../design-system/components/Input';
+import { Modal } from '../design-system/components/Modal';
 import { Select } from '../design-system/components/Select';
 import { Textarea } from '../design-system/components/Textarea';
 
+function initialPlanDraft(item: PlanItem | null): PlanItemDraftInput {
+  const currentYear = new Date().getFullYear();
+  if (!item) {
+    return {
+      title: '',
+      category: 'Cursos',
+      startYear: currentYear,
+      startSemester: 1,
+      endYear: currentYear,
+      endSemester: 2,
+      status: 'Planejado',
+      color: '#28d7f0',
+      notes: '',
+      sortOrder: 0,
+    };
+  }
+  return {
+    title: item.title,
+    category: item.category,
+    startYear: item.startYear,
+    startSemester: item.startSemester,
+    endYear: item.endYear,
+    endSemester: item.endSemester,
+    status: item.status,
+    color: item.color ?? '#28d7f0',
+    notes: item.notes ?? '',
+    sortOrder: item.sortOrder,
+  };
+}
+
 export function PlanItemModal({
-  isOpen,
   onClose,
   itemToEdit,
   onDelete,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   itemToEdit: PlanItem | null;
-  onDelete: (id: string) => void;
+  onDelete: (item: PlanItem) => void;
 }) {
-  const isEditing = !!itemToEdit;
-  const currentYear = new Date().getFullYear();
-
+  const isEditing = Boolean(itemToEdit);
   const createMutation = useCreatePlanItem();
   const updateMutation = useUpdatePlanItem();
+  const [formData, setFormData] = useState<PlanItemDraftInput>(() => initialPlanDraft(itemToEdit));
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<PlanItemDraftInput>({
-    title: '',
-    category: 'Cursos',
-    startYear: currentYear,
-    startSemester: 1,
-    endYear: currentYear,
-    endSemester: 2,
-    status: 'Planejado',
-    color: '#28d7f0',
-    notes: '',
-  });
-
-  useEffect(() => {
-    if (isOpen) {
-      if (itemToEdit) {
-        setFormData({
-          title: itemToEdit.title,
-          category: itemToEdit.category,
-          startYear: itemToEdit.startYear,
-          startSemester: itemToEdit.startSemester,
-          endYear: itemToEdit.endYear,
-          endSemester: itemToEdit.endSemester,
-          status: itemToEdit.status,
-          color: itemToEdit.color || '#28d7f0',
-          notes: itemToEdit.notes || '',
-        });
-      } else {
-        setFormData({
-          title: '',
-          category: 'Cursos',
-          startYear: currentYear,
-          startSemester: 1,
-          endYear: currentYear,
-          endSemester: 2,
-          status: 'Planejado',
-          color: '#28d7f0',
-          notes: '',
-        });
-      }
-    }
-  }, [isOpen, itemToEdit, currentYear]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     try {
-      if (isEditing) {
+      setError(null);
+      if (itemToEdit) {
         await updateMutation.mutateAsync({ id: itemToEdit.id, input: formData });
       } else {
         await createMutation.mutateAsync(formData);
       }
       onClose();
-    } catch (error: any) {
-      alert(`Erro ao salvar: ${error.message}`);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível salvar o item do plano.'));
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Item do Plano' : 'Novo Item do Plano'}>
+    <Modal isOpen onClose={onClose} title={isEditing ? 'Editar item do plano' : 'Novo item do plano'}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Título</label>
-            <Input 
-              value={formData.title} 
-              onChange={e => setFormData({ ...formData, title: e.target.value })}
+            <label htmlFor="plan-title" className="mb-1.5 block text-sm font-medium text-text-muted">Título</label>
+            <Input
+              id="plan-title"
+              value={formData.title}
+              onChange={(event) => setFormData({ ...formData, title: event.target.value })}
               required
-              placeholder="Ex: Pós Graduação em IA"
               autoFocus
+              maxLength={160}
+              placeholder="Ex.: Especialização em IA"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Categoria</label>
-            <Select 
-              value={formData.category} 
-              onChange={e => setFormData({ ...formData, category: e.target.value as any })}
+            <label htmlFor="plan-category" className="mb-1.5 block text-sm font-medium text-text-muted">Categoria</label>
+            <Select
+              id="plan-category"
+              value={formData.category}
+              onChange={(event) => setFormData({ ...formData, category: event.target.value as PlanItemDraftInput['category'] })}
             >
-              {planCategorySchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {planCategorySchema.options.map((option) => <option key={option} value={option}>{option}</option>)}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Status</label>
-            <Select 
-              value={formData.status} 
-              onChange={e => setFormData({ ...formData, status: e.target.value as any })}
+            <label htmlFor="plan-status" className="mb-1.5 block text-sm font-medium text-text-muted">Status</label>
+            <Select
+              id="plan-status"
+              value={formData.status}
+              onChange={(event) => setFormData({ ...formData, status: event.target.value as PlanItemDraftInput['status'] })}
             >
-              {planStatusSchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {planStatusSchema.options.map((option) => <option key={option} value={option}>{option}</option>)}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Início</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-muted">Início</label>
             <div className="flex gap-2">
-              <Input 
-                type="number" 
-                value={formData.startYear} 
-                onChange={e => setFormData({ ...formData, startYear: parseInt(e.target.value) || currentYear })}
-                className="w-2/3"
+              <Input
+                aria-label="Ano inicial"
+                type="number"
+                min={2000}
+                max={2200}
+                value={formData.startYear}
+                onChange={(event) => setFormData({ ...formData, startYear: Number(event.target.value) })}
               />
-              <Select 
-                value={formData.startSemester} 
-                onChange={e => setFormData({ ...formData, startSemester: parseInt(e.target.value) as 1|2 })}
-                className="w-1/3"
+              <Select
+                aria-label="Semestre inicial"
+                value={formData.startSemester}
+                onChange={(event) => setFormData({ ...formData, startSemester: Number(event.target.value) as 1 | 2 })}
+                className="w-28"
               >
-                <option value={1}>1º</option>
-                <option value={2}>2º</option>
+                <option value={1}>1º sem.</option>
+                <option value={2}>2º sem.</option>
               </Select>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Fim</label>
+            <label className="mb-1.5 block text-sm font-medium text-text-muted">Fim</label>
             <div className="flex gap-2">
-              <Input 
-                type="number" 
-                value={formData.endYear} 
-                onChange={e => setFormData({ ...formData, endYear: parseInt(e.target.value) || currentYear })}
-                className="w-2/3"
+              <Input
+                aria-label="Ano final"
+                type="number"
+                min={2000}
+                max={2200}
+                value={formData.endYear}
+                onChange={(event) => setFormData({ ...formData, endYear: Number(event.target.value) })}
               />
-              <Select 
-                value={formData.endSemester} 
-                onChange={e => setFormData({ ...formData, endSemester: parseInt(e.target.value) as 1|2 })}
-                className="w-1/3"
+              <Select
+                aria-label="Semestre final"
+                value={formData.endSemester}
+                onChange={(event) => setFormData({ ...formData, endSemester: Number(event.target.value) as 1 | 2 })}
+                className="w-28"
               >
-                <option value={1}>1º</option>
-                <option value={2}>2º</option>
+                <option value={1}>1º sem.</option>
+                <option value={2}>2º sem.</option>
               </Select>
             </div>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Cor / Tema</label>
+          <fieldset className="md:col-span-2">
+            <legend className="mb-1.5 block text-sm font-medium text-text-muted">Cor</legend>
             <div className="flex gap-3">
               {[
-                { label: 'Lane A', value: '#28d7f0' },
-                { label: 'Lane B', value: '#f5a716' },
-                { label: 'Geral', value: '#91a0b5' },
+                { label: 'Ciano', value: '#28d7f0' },
+                { label: 'Âmbar', value: '#f5a716' },
+                { label: 'Cinza', value: '#91a0b5' },
                 { label: 'Verde', value: '#42c789' },
-                { label: 'Roxo', value: '#a855f7' }
-              ].map(c => (
+                { label: 'Roxo', value: '#a855f7' },
+              ].map((color) => (
                 <button
-                  key={c.value}
+                  key={color.value}
                   type="button"
-                  onClick={() => setFormData({ ...formData, color: c.value })}
-                  className={`h-8 w-16 rounded-md border-2 transition-transform ${formData.color === c.value ? 'border-white scale-110' : 'border-transparent'}`}
-                  style={{ backgroundColor: c.value }}
-                  title={c.label}
+                  onClick={() => setFormData({ ...formData, color: color.value })}
+                  className={`h-8 w-16 rounded-md border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lane-a ${formData.color === color.value ? 'scale-105 border-text' : 'border-transparent'}`}
+                  style={{ backgroundColor: color.value }}
+                  aria-label={`Cor ${color.label}`}
+                  aria-pressed={formData.color === color.value}
                 />
               ))}
             </div>
-          </div>
+          </fieldset>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Anotações (opcional)</label>
-            <Textarea 
-              value={formData.notes || ''} 
-              onChange={e => setFormData({ ...formData, notes: e.target.value })}
+            <label htmlFor="plan-notes" className="mb-1.5 block text-sm font-medium text-text-muted">Anotações</label>
+            <Textarea
+              id="plan-notes"
+              value={formData.notes ?? ''}
+              onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
               rows={3}
+              maxLength={2000}
             />
           </div>
         </div>
 
-        <div className="flex justify-between pt-4 border-t border-border mt-6">
-          {isEditing ? (
-            <Button type="button" variant="danger" onClick={() => onDelete(itemToEdit.id)} className="gap-2">
-              <Trash2 className="h-4 w-4" /> Excluir
+        <FeedbackMessage message={error} />
+        <div className="flex justify-between border-t border-border pt-4">
+          {itemToEdit ? (
+            <Button type="button" variant="danger" onClick={() => onDelete(itemToEdit)} className="gap-2">
+              <Trash2 className="h-4 w-4" aria-hidden="true" /> Excluir
             </Button>
-          ) : <div />}
+          ) : <span />}
           <div className="flex gap-3">
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-              {isEditing ? 'Salvar Alterações' : 'Criar Item'}
+              {createMutation.isPending || updateMutation.isPending ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Criar item'}
             </Button>
           </div>
         </div>
-        
       </form>
     </Modal>
   );

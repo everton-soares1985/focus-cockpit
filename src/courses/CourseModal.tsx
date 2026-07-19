@@ -1,177 +1,183 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useCreateCourse, useUpdateCourse } from './courseHooks';
-import { courseStatusSchema, type Course, type CourseDraftInput } from './courseSchema';
+import {
+  courseStatusSchema,
+  type Course,
+  type CourseDraftInput,
+} from './courseSchema';
 import { prioritySchema } from '../projects/projectSchema';
 import { Button } from '../design-system/components/Button';
-import { Modal } from '../design-system/components/Modal';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 import { Input } from '../design-system/components/Input';
+import { Modal } from '../design-system/components/Modal';
 import { Select } from '../design-system/components/Select';
 import { Textarea } from '../design-system/components/Textarea';
 
+function initialCourseDraft(course: Course | null): CourseDraftInput {
+  if (!course) {
+    return {
+      title: '',
+      institution: '',
+      category: '',
+      status: 'Planejado',
+      priority: null,
+      startedOn: null,
+      completedOn: null,
+      notes: '',
+    };
+  }
+  return {
+    title: course.title,
+    institution: course.institution ?? '',
+    category: course.category ?? '',
+    status: course.status,
+    priority: course.priority,
+    startedOn: course.startedOn,
+    completedOn: course.completedOn,
+    notes: course.notes ?? '',
+  };
+}
+
 export function CourseModal({
-  isOpen,
   onClose,
   courseToEdit,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   courseToEdit: Course | null;
 }) {
-  const isEditing = !!courseToEdit;
-
+  const isEditing = Boolean(courseToEdit);
   const createMutation = useCreateCourse();
   const updateMutation = useUpdateCourse();
+  const [formData, setFormData] = useState<CourseDraftInput>(() =>
+    initialCourseDraft(courseToEdit),
+  );
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<CourseDraftInput>({
-    title: '',
-    institution: '',
-    category: '',
-    status: 'Planejado',
-    priority: null,
-    startedOn: null,
-    completedOn: null,
-    notes: '',
-  });
-
-  useEffect(() => {
-    if (isOpen) {
-      if (courseToEdit) {
-        setFormData({
-          title: courseToEdit.title,
-          institution: courseToEdit.institution || '',
-          category: courseToEdit.category || '',
-          status: courseToEdit.status,
-          priority: courseToEdit.priority,
-          startedOn: courseToEdit.startedOn,
-          completedOn: courseToEdit.completedOn,
-          notes: courseToEdit.notes || '',
-        });
-      } else {
-        setFormData({
-          title: '',
-          institution: '',
-          category: '',
-          status: 'Planejado',
-          priority: null,
-          startedOn: null,
-          completedOn: null,
-          notes: '',
-        });
-      }
-    }
-  }, [isOpen, courseToEdit]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     try {
-      const payload = {
-        ...formData,
-        institution: formData.institution?.trim() || null,
-        category: formData.category?.trim() || null,
-        startedOn: formData.startedOn || null,
-        completedOn: formData.completedOn || null,
-        notes: formData.notes?.trim() || null,
-      };
-
-      if (isEditing) {
-        await updateMutation.mutateAsync({ id: courseToEdit.id, input: payload as any });
+      setError(null);
+      if (courseToEdit) {
+        await updateMutation.mutateAsync({ id: courseToEdit.id, input: formData });
       } else {
-        await createMutation.mutateAsync(payload as any);
+        await createMutation.mutateAsync(formData);
       }
       onClose();
-    } catch (error: any) {
-      alert(`Erro ao salvar: ${error.message}`);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível salvar o curso.'));
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Curso' : 'Novo Curso'} className="max-w-2xl">
+    <Modal isOpen onClose={onClose} title={isEditing ? 'Editar curso' : 'Novo curso'} className="max-w-2xl">
       <form onSubmit={handleSubmit} className="space-y-5">
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Título do Curso</label>
-            <Input 
-              value={formData.title} 
-              onChange={e => setFormData({ ...formData, title: e.target.value })}
+            <label htmlFor="course-title" className="mb-1.5 block text-sm font-medium text-text-muted">Nome do curso</label>
+            <Input
+              id="course-title"
+              value={formData.title}
+              onChange={(event) => setFormData({ ...formData, title: event.target.value })}
               required
               autoFocus
+              maxLength={180}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Instituição / Plataforma</label>
-            <Input 
-              value={formData.institution || ''} 
-              onChange={e => setFormData({ ...formData, institution: e.target.value })}
+            <label htmlFor="course-institution" className="mb-1.5 block text-sm font-medium text-text-muted">Instituição ou plataforma</label>
+            <Input
+              id="course-institution"
+              value={formData.institution ?? ''}
+              onChange={(event) => setFormData({ ...formData, institution: event.target.value })}
+              maxLength={120}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Categoria</label>
-            <Input 
-              value={formData.category || ''} 
-              onChange={e => setFormData({ ...formData, category: e.target.value })}
-              placeholder="Ex: Desenvolvimento, Idiomas..."
+            <label htmlFor="course-category" className="mb-1.5 block text-sm font-medium text-text-muted">Categoria</label>
+            <Input
+              id="course-category"
+              value={formData.category ?? ''}
+              onChange={(event) => setFormData({ ...formData, category: event.target.value })}
+              placeholder="Ex.: IA, idiomas, dados"
+              maxLength={80}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Status</label>
-            <Select 
-              value={formData.status} 
-              onChange={e => setFormData({ ...formData, status: e.target.value as any })}
+            <label htmlFor="course-status" className="mb-1.5 block text-sm font-medium text-text-muted">Status</label>
+            <Select
+              id="course-status"
+              value={formData.status}
+              onChange={(event) => setFormData({ ...formData, status: event.target.value as CourseDraftInput['status'] })}
             >
-              {courseStatusSchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {courseStatusSchema.options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Prioridade</label>
-            <Select 
-              value={formData.priority || ''} 
-              onChange={e => setFormData({ ...formData, priority: (e.target.value as any) || null })}
+            <label htmlFor="course-priority" className="mb-1.5 block text-sm font-medium text-text-muted">Prioridade</label>
+            <Select
+              id="course-priority"
+              value={formData.priority ?? ''}
+              onChange={(event) => setFormData({ ...formData, priority: (event.target.value || null) as CourseDraftInput['priority'] })}
             >
-              <option value="">(Nenhuma)</option>
-              {prioritySchema.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              <option value="">Sem prioridade</option>
+              {prioritySchema.options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Data de Início</label>
-            <Input 
+            <label htmlFor="course-start" className="mb-1.5 block text-sm font-medium text-text-muted">Início</label>
+            <Input
+              id="course-start"
               type="date"
-              value={formData.startedOn || ''} 
-              onChange={e => setFormData({ ...formData, startedOn: e.target.value })}
+              value={formData.startedOn ?? ''}
+              onChange={(event) => setFormData({ ...formData, startedOn: event.target.value })}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Data de Conclusão</label>
-            <Input 
+            <label htmlFor="course-end" className="mb-1.5 block text-sm font-medium text-text-muted">Conclusão</label>
+            <Input
+              id="course-end"
               type="date"
-              value={formData.completedOn || ''} 
-              onChange={e => setFormData({ ...formData, completedOn: e.target.value })}
+              value={formData.completedOn ?? ''}
+              onChange={(event) => setFormData({ ...formData, completedOn: event.target.value })}
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Anotações / Link</label>
-            <Textarea 
-              value={formData.notes || ''} 
-              onChange={e => setFormData({ ...formData, notes: e.target.value })}
+            <label htmlFor="course-notes" className="mb-1.5 block text-sm font-medium text-text-muted">Anotações ou link</label>
+            <Textarea
+              id="course-notes"
+              value={formData.notes ?? ''}
+              onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
               rows={3}
+              maxLength={3000}
             />
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+        <FeedbackMessage message={error} />
+        <div className="flex justify-end gap-3 border-t border-border pt-4">
           <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-            {isEditing ? 'Salvar Alterações' : 'Criar Curso'}
+            {createMutation.isPending || updateMutation.isPending
+              ? 'Salvando...'
+              : isEditing
+                ? 'Salvar alterações'
+                : 'Criar curso'}
           </Button>
         </div>
-        
       </form>
     </Modal>
   );

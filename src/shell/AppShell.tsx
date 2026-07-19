@@ -4,12 +4,23 @@ import AppHeader from './AppHeader';
 import WorkbookTabs from './WorkbookTabs';
 import { getDb } from '../database/db';
 import { runDemoSeed } from '../database/seed';
+import { Button } from '../design-system/components/Button';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 
 export default function AppShell() {
   const location = useLocation();
   const queryClient = useQueryClient();
 
-  const { data: isInitialized, isLoading } = useQuery({
+  const {
+    data: isInitialized,
+    isLoading,
+    isError,
+    error: initializationError,
+    refetch,
+  } = useQuery({
     queryKey: ['db-init'],
     queryFn: async () => {
       const db = await getDb();
@@ -24,7 +35,7 @@ export default function AppShell() {
            UNION ALL SELECT 1 FROM shortcuts
          ) AS initialized`,
       );
-      return result[0].initialized === 1;
+      return result[0]?.initialized === 1;
     },
   });
 
@@ -41,7 +52,7 @@ export default function AppShell() {
 
   const startEmptyMutation = useMutation({
     mutationFn: async () => {
-       localStorage.setItem('has_seen_onboarding', 'true');
+      localStorage.setItem('has_seen_onboarding', 'true');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['db-init'] });
@@ -49,7 +60,24 @@ export default function AppShell() {
   });
 
   if (isLoading) {
-    return <div className="flex h-screen items-center justify-center bg-bg text-text">Carregando Banco de Dados...</div>;
+    return <div className="flex h-screen items-center justify-center bg-bg text-text">Preparando seu painel...</div>;
+  }
+
+  if (isError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg p-6 text-text">
+        <div className="w-full max-w-md space-y-4 rounded-xl border border-border bg-surface p-6">
+          <h2 className="text-lg font-semibold">O painel não pôde ser iniciado</h2>
+          <FeedbackMessage
+            message={getErrorMessage(
+              initializationError,
+              'O banco local não respondeu. Feche e abra o aplicativo novamente.',
+            )}
+          />
+          <Button onClick={() => refetch()}>Tentar novamente</Button>
+        </div>
+      </div>
+    );
   }
 
   const hasSeenOnboarding = localStorage.getItem('has_seen_onboarding') === 'true';
@@ -62,18 +90,32 @@ export default function AppShell() {
           <h2 className="mb-2 text-xl font-semibold text-text">Bem-vindo ao Focus Cockpit</h2>
           <p className="mb-8 text-sm text-text-muted">Como você deseja iniciar seu painel?</p>
           <div className="flex flex-col gap-4">
-            <button
+            <FeedbackMessage
+              message={
+                seedMutation.error
+                  ? getErrorMessage(seedMutation.error, 'Não foi possível carregar a demonstração.')
+                  : startEmptyMutation.error
+                    ? getErrorMessage(startEmptyMutation.error, 'Não foi possível iniciar o painel vazio.')
+                    : null
+              }
+            />
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={() => startEmptyMutation.mutate()}
-              className="rounded bg-surface-raised px-4 py-3 font-medium text-text transition-colors hover:bg-surface-soft border border-border-strong cursor-pointer"
+              disabled={seedMutation.isPending || startEmptyMutation.isPending}
+              className="w-full"
             >
               Começar Vazio
-            </button>
-            <button
+            </Button>
+            <Button
+              size="lg"
               onClick={() => seedMutation.mutate()}
-              className="rounded bg-lane-b px-4 py-3 font-medium text-bg transition-colors hover:opacity-90 cursor-pointer"
+              disabled={seedMutation.isPending || startEmptyMutation.isPending}
+              className="w-full border-lane-b/50 text-lane-b"
             >
-              Carregar Demonstração
-            </button>
+              {seedMutation.isPending ? 'Carregando demonstração...' : 'Carregar Demonstração'}
+            </Button>
           </div>
         </div>
       </div>

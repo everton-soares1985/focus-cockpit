@@ -8,28 +8,49 @@ import { Badge } from '../design-system/components/Badge';
 import { Modal } from '../design-system/components/Modal';
 import { Select } from '../design-system/components/Select';
 import { openSavedTarget } from '../platform/nativeFiles';
+import { useSavedTargetStatus } from '../platform/savedTargetHooks';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
+import {
+  isTargetAvailable,
+  ShortcutTargetStatus,
+} from '../shortcuts/ShortcutTargetStatus';
 
 export function FocusCard({ lane }: { lane: Lane }) {
   const { data: slots, isLoading } = useFocusSlots();
-  const { data: allProjects } = useProjects({ lane, includeArchived: false, status: 'Ativo' });
+  const { data: allProjects } = useProjects({ lane, includeArchived: false });
   const setFocusProject = useSetFocusProject();
   
   const [isEditing, setIsEditing] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
   const slot = slots?.find((s) => s.lane === lane);
   const project = slot?.project;
+  const folderStatus = useSavedTargetStatus(project?.folderPath, 'folder');
 
   const isLaneA = lane === 'A';
 
   const handleSave = async () => {
-    await setFocusProject.mutateAsync({ lane, projectId: selectedProjectId || null });
-    setIsEditing(false);
+    try {
+      setError(null);
+      await setFocusProject.mutateAsync({ lane, projectId: selectedProjectId || null });
+      setIsEditing(false);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível atualizar o foco.'));
+    }
   };
 
   const openFolder = async () => {
     if (project?.folderPath) {
-      await openSavedTarget(project.folderPath, 'folder').catch((e) => alert(e));
+      try {
+        setError(null);
+        await openSavedTarget(project.folderPath, 'folder');
+      } catch (openError: unknown) {
+        setError(getErrorMessage(openError, 'Não foi possível abrir a pasta.'));
+      }
     }
   };
 
@@ -43,10 +64,11 @@ export function FocusCard({ lane }: { lane: Lane }) {
               LANE {lane}
             </Badge>
             <Button variant="ghost" size="icon" onClick={() => {
+              setError(null);
               setSelectedProjectId(project?.id || '');
               setIsEditing(true);
-            }}>
-              <Settings2 className="h-4 w-4 text-text-muted" />
+            }} aria-label={`Editar foco da Lane ${lane}`} title={`Editar foco da Lane ${lane}`}>
+              <Settings2 className="h-4 w-4 text-text-muted" aria-hidden="true" />
             </Button>
           </div>
 
@@ -60,27 +82,49 @@ export function FocusCard({ lane }: { lane: Lane }) {
               <h3 className="text-lg font-semibold text-text mb-1 line-clamp-1" title={project.name}>{project.name}</h3>
               {project.area && <p className="text-sm text-text-muted mb-4">{project.area}</p>}
               
-              <div className="mt-auto space-y-4">
-                {project.nextAction && (
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1.5">Próxima Ação</p>
-                    <p className="text-sm text-text bg-surface-soft p-2.5 rounded-lg border border-border-strong line-clamp-2 leading-relaxed">
-                      {project.nextAction}
-                    </p>
-                  </div>
-                )}
+              <div className="mt-auto space-y-3">
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Próxima ação</p>
+                  <p className="min-h-10 rounded-lg border border-border-strong bg-surface-soft p-2.5 text-sm leading-relaxed text-text line-clamp-2">
+                    {project.nextAction || 'Ainda não definida'}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Último avanço</p>
+                  <p className="min-h-10 rounded-lg border border-border bg-surface-soft/60 p-2.5 text-sm leading-relaxed text-text-muted line-clamp-2">
+                    {project.lastProgress || 'Ainda não registrado'}
+                  </p>
+                </div>
                 
                 {project.folderPath && (
-                  <Button variant="secondary" size="sm" onClick={openFolder} className="w-full gap-2 text-xs">
-                    <FolderOpen className="h-3.5 w-3.5" /> Abrir Pasta
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={openFolder}
+                      disabled={!isTargetAvailable(folderStatus.data)}
+                      className="flex-1 gap-2 text-xs"
+                    >
+                      <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" /> Abrir pasta
+                    </Button>
+                    <ShortcutTargetStatus
+                      status={folderStatus.data}
+                      isLoading={folderStatus.isLoading}
+                    />
+                  </div>
                 )}
+                <FeedbackMessage message={error} />
               </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-text-muted py-6 border-2 border-dashed border-border rounded-lg mt-2">
               <p className="text-sm">Nenhum projeto selecionado</p>
-              <Button variant="ghost" size="sm" className="mt-2" onClick={() => setIsEditing(true)}>
+              <Button variant="ghost" size="sm" className="mt-2" onClick={() => {
+                setSelectedProjectId('');
+                setError(null);
+                setIsEditing(true);
+              }}>
                 Definir Foco
               </Button>
             </div>
@@ -101,8 +145,9 @@ export function FocusCard({ lane }: { lane: Lane }) {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </Select>
-            <p className="text-xs text-text-muted mt-2">Apenas projetos não arquivados e com status 'Ativo' estão disponíveis.</p>
+            <p className="text-xs text-text-muted mt-2">Todos os projetos não arquivados desta Lane estão disponíveis.</p>
           </div>
+          <FeedbackMessage message={error} />
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={setFocusProject.isPending}>

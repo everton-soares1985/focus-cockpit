@@ -1,15 +1,146 @@
 import { useState } from 'react';
-import { Plus, Search, FolderOpen, Target, Pencil, Archive, ArchiveRestore } from 'lucide-react';
-import { useProjects, useArchiveProject, useRestoreProject } from './projectHooks';
+import {
+  Archive,
+  ArchiveRestore,
+  FolderOpen,
+  Pencil,
+  Plus,
+  Search,
+  Target,
+} from 'lucide-react';
+import {
+  useArchiveProject,
+  useProjects,
+  useRestoreProject,
+} from './projectHooks';
 import { useSetFocusProject } from '../focus/focusHooks';
 import { openSavedTarget } from '../platform/nativeFiles';
-import type { ProjectFilters, Project, Lane, ProjectStatus } from './projectSchema';
+import { useSavedTargetStatus } from '../platform/savedTargetHooks';
+import type {
+  Lane,
+  Project,
+  ProjectFilters,
+  ProjectStatus,
+} from './projectSchema';
+import { Badge } from '../design-system/components/Badge';
 import { Button } from '../design-system/components/Button';
+import { ConfirmDialog } from '../design-system/components/ConfirmDialog';
+import { EmptyState } from '../design-system/components/EmptyState';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 import { Input } from '../design-system/components/Input';
 import { Select } from '../design-system/components/Select';
-import { Badge } from '../design-system/components/Badge';
-import { EmptyState } from '../design-system/components/EmptyState';
+import { isTargetAvailable } from '../shortcuts/ShortcutTargetStatus';
 import { ProjectModal } from './ProjectModal';
+
+type ScreenFeedback = { tone: 'error' | 'success'; text: string } | null;
+
+function ProjectTableRow({
+  project,
+  onArchive,
+  onRestore,
+  onEdit,
+  onSetFocus,
+  onOpenError,
+}: {
+  project: Project;
+  onArchive: (project: Project) => void;
+  onRestore: (project: Project) => void;
+  onEdit: (project: Project) => void;
+  onSetFocus: (project: Project) => void;
+  onOpenError: (error: unknown) => void;
+}) {
+  const folderStatus = useSavedTargetStatus(project.folderPath, 'folder');
+  const folderAvailable = isTargetAvailable(folderStatus.data);
+
+  const handleOpenFolder = async () => {
+    if (!project.folderPath) return;
+    try {
+      await openSavedTarget(project.folderPath, 'folder');
+    } catch (error: unknown) {
+      onOpenError(error);
+    }
+  };
+
+  return (
+    <tr className="group border-b border-border/50 transition-colors hover:bg-surface-soft/50 focus-within:bg-surface-soft/50">
+      <td className="px-4 py-3">
+        <p className={`font-medium ${project.archived ? 'text-text-muted line-through' : 'text-text'}`}>
+          {project.name}
+        </p>
+      </td>
+      <td className="px-4 py-3">
+        <Badge variant={project.lane === 'A' ? 'lane-a' : 'lane-b'}>Lane {project.lane}</Badge>
+      </td>
+      <td className="px-4 py-3 text-text-muted">{project.area || '—'}</td>
+      <td className="px-4 py-3">
+        <Badge variant={project.status === 'Concluído' ? 'success' : project.status === 'Pausado' ? 'neutral' : 'outline'}>
+          {project.status}
+        </Badge>
+      </td>
+      <td className="px-4 py-3">
+        {project.priority ? (
+          <span className={`text-xs font-semibold ${
+            project.priority === 'Alta'
+              ? 'text-danger'
+              : project.priority === 'Média'
+                ? 'text-lane-b'
+                : 'text-success'
+          }`}>
+            {project.priority}
+          </span>
+        ) : '—'}
+      </td>
+      <td className="max-w-56 truncate px-4 py-3 text-text-muted" title={project.nextAction || ''}>
+        {project.nextAction || '—'}
+      </td>
+      <td className="max-w-56 truncate px-4 py-3 text-text-muted" title={project.lastProgress || ''}>
+        {project.lastProgress || '—'}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="flex justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {project.folderPath && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenFolder}
+              disabled={!folderAvailable}
+              title={folderAvailable ? 'Abrir pasta' : 'Pasta não encontrada'}
+              aria-label={folderAvailable ? `Abrir pasta de ${project.name}` : `Pasta de ${project.name} não encontrada`}
+            >
+              <FolderOpen className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
+          {!project.archived && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onSetFocus(project)}
+              title="Colocar em foco"
+              aria-label={`Colocar ${project.name} em foco`}
+            >
+              <Target className={`h-4 w-4 ${project.lane === 'A' ? 'text-lane-a' : 'text-lane-b'}`} aria-hidden="true" />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" onClick={() => onEdit(project)} title="Editar" aria-label={`Editar ${project.name}`}>
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          {project.archived ? (
+            <Button variant="ghost" size="icon" onClick={() => onRestore(project)} title="Restaurar" aria-label={`Restaurar ${project.name}`}>
+              <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" onClick={() => onArchive(project)} title="Arquivar" aria-label={`Arquivar ${project.name}`} className="hover:text-danger">
+              <Archive className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 export default function ProjectsScreen() {
   const [filters, setFilters] = useState<ProjectFilters>({
@@ -18,179 +149,145 @@ export default function ProjectsScreen() {
     status: 'Ativo',
     includeArchived: false,
   });
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [archiveCandidate, setArchiveCandidate] = useState<Project | null>(null);
+  const [feedback, setFeedback] = useState<ScreenFeedback>(null);
 
-  const { data: projects, isLoading } = useProjects(filters);
+  const { data: projects, isLoading, isError, error } = useProjects(filters);
   const archiveMutation = useArchiveProject();
   const restoreMutation = useRestoreProject();
   const setFocusProject = useSetFocusProject();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-
-  const handleCreate = () => {
-    setEditingProject(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (project: Project) => {
-    setEditingProject(project);
-    setIsModalOpen(true);
-  };
-
-  const handleArchive = async (id: string) => {
-    if (confirm('Deseja realmente arquivar este projeto? Ele não aparecerá mais nas listas ativas.')) {
-      await archiveMutation.mutateAsync(id);
-    }
-  };
-
-  const handleRestore = async (id: string) => {
-    await restoreMutation.mutateAsync(id);
-  };
-
-  const handleSetFocus = async (lane: Lane, projectId: string) => {
-    await setFocusProject.mutateAsync({ lane, projectId });
-    alert('Projeto colocado em foco com sucesso!');
-  };
-
-  const handleOpenFolder = async (folderPath: string) => {
+  const handleArchive = async () => {
+    if (!archiveCandidate) return;
     try {
-      await openSavedTarget(folderPath, 'folder');
-    } catch (e: any) {
-      alert(`Erro ao abrir pasta: ${e.message}`);
+      setFeedback(null);
+      await archiveMutation.mutateAsync(archiveCandidate.id);
+      setArchiveCandidate(null);
+    } catch (archiveError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(archiveError, 'Não foi possível arquivar o projeto.') });
     }
+  };
+
+  const handleRestore = async (project: Project) => {
+    try {
+      setFeedback(null);
+      await restoreMutation.mutateAsync(project.id);
+      setFeedback({ tone: 'success', text: `“${project.name}” foi restaurado.` });
+    } catch (restoreError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(restoreError, 'Não foi possível restaurar o projeto.') });
+    }
+  };
+
+  const handleSetFocus = async (project: Project) => {
+    try {
+      setFeedback(null);
+      await setFocusProject.mutateAsync({ lane: project.lane, projectId: project.id });
+      setFeedback({ tone: 'success', text: `“${project.name}” agora está em foco na Lane ${project.lane}.` });
+    } catch (focusError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(focusError, 'Não foi possível atualizar o foco.') });
+    }
+  };
+
+  const closeEditor = () => {
+    setEditingProject(null);
+    setIsCreating(false);
   };
 
   return (
-    <div className="flex h-full flex-col p-6 overflow-hidden">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-text tracking-tight flex items-center gap-2">
-          Projetos Ativos
-        </h2>
-        <Button onClick={handleCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Novo Projeto
+    <div className="flex h-full flex-col overflow-hidden p-6">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-text">Projetos</h2>
+          <p className="mt-1 text-xs text-text-muted">Lane A para o principal; Lane B para o que evolui em paralelo.</p>
+        </div>
+        <Button onClick={() => setIsCreating(true)} className="gap-2">
+          <Plus className="h-4 w-4" aria-hidden="true" /> Novo projeto
         </Button>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
-          <Input 
-            placeholder="Buscar projetos..." 
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="relative min-w-64 flex-1 max-w-sm">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-text-muted" aria-hidden="true" />
+          <Input
+            aria-label="Buscar projetos"
+            placeholder="Buscar projetos..."
             className="pl-9"
-            value={filters.search || ''}
-            onChange={e => setFilters({ ...filters, search: e.target.value })}
+            value={filters.search ?? ''}
+            onChange={(event) => setFilters({ ...filters, search: event.target.value })}
           />
         </div>
-        <Select 
-          value={filters.lane || ''} 
-          onChange={e => setFilters({ ...filters, lane: (e.target.value as Lane) || undefined })}
+        <Select
+          aria-label="Filtrar por Lane"
+          value={filters.lane ?? ''}
+          onChange={(event) => setFilters({ ...filters, lane: (event.target.value || undefined) as Lane | undefined })}
           className="w-40"
         >
-          <option value="">Todas Lanes</option>
+          <option value="">Todas as Lanes</option>
           <option value="A">Lane A</option>
           <option value="B">Lane B</option>
         </Select>
-        <Select 
-          value={filters.status || ''} 
-          onChange={e => setFilters({ ...filters, status: (e.target.value as ProjectStatus) || undefined })}
+        <Select
+          aria-label="Filtrar por status"
+          value={filters.status ?? ''}
+          onChange={(event) => setFilters({ ...filters, status: (event.target.value || undefined) as ProjectStatus | undefined })}
           className="w-48"
         >
-          <option value="">Todos os Status</option>
+          <option value="">Todos os status</option>
           <option value="Ativo">Ativo</option>
           <option value="Pausado">Pausado</option>
           <option value="Concluído">Concluído</option>
         </Select>
-        <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer px-2">
-          <input 
-            type="checkbox" 
-            checked={filters.includeArchived || false}
-            onChange={e => setFilters({ ...filters, includeArchived: e.target.checked })}
+        <label className="flex cursor-pointer items-center gap-2 px-2 text-sm text-text-muted">
+          <input
+            type="checkbox"
+            checked={filters.includeArchived ?? false}
+            onChange={(event) => setFilters({ ...filters, includeArchived: event.target.checked })}
             className="rounded border-border bg-surface text-lane-a focus:ring-lane-a"
           />
           Incluir arquivados
         </label>
       </div>
 
+      <FeedbackMessage message={feedback?.text} tone={feedback?.tone} className="mb-4" />
+      {isError && (
+        <FeedbackMessage message={getErrorMessage(error, 'Não foi possível carregar os projetos.')} className="mb-4" />
+      )}
+
       <div className="flex-1 overflow-auto rounded-xl border border-border bg-surface">
-        <table className="w-full text-left text-sm border-collapse min-w-[800px]">
-          <thead className="sticky top-0 bg-surface-raised border-b border-border z-10">
+        <table className="w-full min-w-[1280px] border-collapse text-left text-sm">
+          <thead className="sticky top-0 z-10 border-b border-border bg-surface-raised">
             <tr>
-              <th className="px-4 py-3 font-medium text-text-muted">Projeto</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-24">Lane</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-32">Status</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-32">Prioridade</th>
-              <th className="px-4 py-3 font-medium text-text-muted">Próxima Ação</th>
-              <th className="px-4 py-3 font-medium text-text-muted text-right w-48">Ações</th>
+              <th className="px-4 py-3 font-medium text-text-muted">Nome</th>
+              <th className="w-24 px-4 py-3 font-medium text-text-muted">Lane</th>
+              <th className="w-36 px-4 py-3 font-medium text-text-muted">Área</th>
+              <th className="w-32 px-4 py-3 font-medium text-text-muted">Status</th>
+              <th className="w-28 px-4 py-3 font-medium text-text-muted">Prioridade</th>
+              <th className="px-4 py-3 font-medium text-text-muted">Próxima ação</th>
+              <th className="px-4 py-3 font-medium text-text-muted">Último avanço</th>
+              <th className="w-44 px-4 py-3 text-right font-medium text-text-muted">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-text-muted">Carregando projetos...</td>
-              </tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-text-muted">Carregando projetos...</td></tr>
             ) : projects && projects.length > 0 ? (
-              projects.map(p => (
-                <tr key={p.id} className="border-b border-border/50 hover:bg-surface-soft/50 transition-colors group">
-                  <td className="px-4 py-3">
-                    <p className={`font-medium ${p.archived ? 'text-text-muted line-through' : 'text-text'}`}>{p.name}</p>
-                    {p.area && <p className="text-xs text-text-muted mt-0.5">{p.area}</p>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={p.lane === 'A' ? 'lane-a' : 'lane-b'}>LANE {p.lane}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={p.status === 'Concluído' ? 'success' : p.status === 'Pausado' ? 'neutral' : 'outline'}>
-                      {p.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    {p.priority && (
-                      <span className={`text-xs font-semibold ${
-                        p.priority === 'Alta' ? 'text-danger' : 
-                        p.priority === 'Média' ? 'text-lane-b' : 'text-success'
-                      }`}>
-                        {p.priority}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-text-muted truncate max-w-[200px]" title={p.nextAction || ''}>
-                    {p.nextAction || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {p.folderPath && (
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenFolder(p.folderPath!)} title="Abrir Pasta">
-                          <FolderOpen className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {!p.archived && p.status === 'Ativo' && (
-                        <Button variant="ghost" size="icon" onClick={() => handleSetFocus(p.lane, p.id)} title="Colocar em Foco">
-                          <Target className="h-4 w-4 text-lane-a" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(p)} title="Editar">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {p.archived ? (
-                        <Button variant="ghost" size="icon" onClick={() => handleRestore(p.id)} title="Restaurar">
-                          <ArchiveRestore className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button variant="ghost" size="icon" onClick={() => handleArchive(p.id)} title="Arquivar" className="hover:text-danger">
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+              projects.map((project) => (
+                <ProjectTableRow
+                  key={project.id}
+                  project={project}
+                  onArchive={setArchiveCandidate}
+                  onRestore={handleRestore}
+                  onEdit={setEditingProject}
+                  onSetFocus={handleSetFocus}
+                  onOpenError={(openError) => setFeedback({ tone: 'error', text: getErrorMessage(openError, 'Não foi possível abrir a pasta.') })}
+                />
               ))
             ) : (
               <tr>
-                <td colSpan={6}>
-                  <EmptyState 
-                    title="Nenhum projeto encontrado"
-                    description="Não há projetos que correspondam aos filtros atuais."
-                  />
+                <td colSpan={8}>
+                  <EmptyState title="Nenhum projeto encontrado" description="Ajuste os filtros ou cadastre o primeiro projeto." />
                 </td>
               </tr>
             )}
@@ -198,10 +295,22 @@ export default function ProjectsScreen() {
         </table>
       </div>
 
-      <ProjectModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        projectToEdit={editingProject}
+      {(isCreating || editingProject) && (
+        <ProjectModal
+          key={editingProject?.id ?? 'new'}
+          onClose={closeEditor}
+          projectToEdit={editingProject}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={Boolean(archiveCandidate)}
+        title="Arquivar projeto"
+        description={`“${archiveCandidate?.name ?? ''}” sairá das listas ativas e deixará o foco, mas poderá ser restaurado depois.`}
+        confirmLabel="Arquivar projeto"
+        isPending={archiveMutation.isPending}
+        onCancel={() => setArchiveCandidate(null)}
+        onConfirm={handleArchive}
       />
     </div>
   );

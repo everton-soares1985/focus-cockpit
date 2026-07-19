@@ -1,158 +1,201 @@
 import { useState } from 'react';
-import { Plus, Search, Pencil, Archive, ArchiveRestore, GraduationCap } from 'lucide-react';
-import { useCourses, useArchiveCourse, useRestoreCourse } from './courseHooks';
-import type { CourseFilters, Course, CourseStatus } from './courseSchema';
+import {
+  Archive,
+  ArchiveRestore,
+  GraduationCap,
+  Pencil,
+  Plus,
+  Search,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  useArchiveCourse,
+  useCourses,
+  useRestoreCourse,
+} from './courseHooks';
+import type { Course, CourseFilters, CourseStatus } from './courseSchema';
+import { Badge } from '../design-system/components/Badge';
 import { Button } from '../design-system/components/Button';
+import { ConfirmDialog } from '../design-system/components/ConfirmDialog';
+import { EmptyState } from '../design-system/components/EmptyState';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
 import { Input } from '../design-system/components/Input';
 import { Select } from '../design-system/components/Select';
-import { Badge } from '../design-system/components/Badge';
-import { EmptyState } from '../design-system/components/EmptyState';
 import { CourseModal } from './CourseModal';
 
+type ScreenFeedback = { tone: 'error' | 'success'; text: string } | null;
+
 export default function CoursesScreen() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<CourseFilters>({
     search: '',
     status: undefined,
     category: '',
     includeArchived: false,
   });
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [archiveCandidate, setArchiveCandidate] = useState<Course | null>(null);
+  const [feedback, setFeedback] = useState<ScreenFeedback>(null);
 
-  const { data: courses, isLoading } = useCourses(filters);
+  const { data: courses, isLoading, isError, error } = useCourses(filters);
   const archiveMutation = useArchiveCourse();
   const restoreMutation = useRestoreCourse();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-
-  const handleCreate = () => {
-    setEditingCourse(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (course: Course) => {
-    setEditingCourse(course);
-    setIsModalOpen(true);
-  };
-
-  const handleArchive = async (id: string) => {
-    if (confirm('Deseja realmente arquivar este curso? Ele não aparecerá mais nas listas ativas, mas os diplomas não serão apagados.')) {
-      await archiveMutation.mutateAsync(id);
+  const handleArchive = async () => {
+    if (!archiveCandidate) return;
+    try {
+      setFeedback(null);
+      await archiveMutation.mutateAsync(archiveCandidate.id);
+      setArchiveCandidate(null);
+    } catch (archiveError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(archiveError, 'Não foi possível arquivar o curso.') });
     }
   };
 
-  const handleRestore = async (id: string) => {
-    await restoreMutation.mutateAsync(id);
+  const handleRestore = async (course: Course) => {
+    try {
+      setFeedback(null);
+      await restoreMutation.mutateAsync(course.id);
+      setFeedback({ tone: 'success', text: `“${course.title}” foi restaurado.` });
+    } catch (restoreError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(restoreError, 'Não foi possível restaurar o curso.') });
+    }
+  };
+
+  const closeEditor = () => {
+    setEditingCourse(null);
+    setIsCreating(false);
   };
 
   return (
-    <div className="flex h-full flex-col p-6 overflow-hidden">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-text tracking-tight flex items-center gap-2">
-          Cursos e Treinamentos
-        </h2>
-        <Button onClick={handleCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Novo Curso
+    <div className="flex h-full flex-col overflow-hidden p-6">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-text">Cursos</h2>
+          <p className="mt-1 text-xs text-text-muted">Acompanhe o que pretende fazer, está estudando e já concluiu.</p>
+        </div>
+        <Button onClick={() => setIsCreating(true)} className="gap-2">
+          <Plus className="h-4 w-4" aria-hidden="true" /> Novo curso
         </Button>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-text-muted" />
-          <Input 
-            placeholder="Buscar cursos..." 
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="relative min-w-64 flex-1 max-w-sm">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-text-muted" aria-hidden="true" />
+          <Input
+            aria-label="Buscar cursos"
+            placeholder="Buscar cursos..."
             className="pl-9"
-            value={filters.search || ''}
-            onChange={e => setFilters({ ...filters, search: e.target.value })}
+            value={filters.search ?? ''}
+            onChange={(event) => setFilters({ ...filters, search: event.target.value })}
           />
         </div>
-        <Select 
-          value={filters.status || ''} 
-          onChange={e => setFilters({ ...filters, status: (e.target.value as CourseStatus) || undefined })}
+        <Select
+          aria-label="Filtrar cursos por status"
+          value={filters.status ?? ''}
+          onChange={(event) => setFilters({ ...filters, status: (event.target.value || undefined) as CourseStatus | undefined })}
           className="w-48"
         >
-          <option value="">Todos os Status</option>
+          <option value="">Todos os status</option>
           <option value="Planejado">Planejado</option>
           <option value="Em andamento">Em andamento</option>
           <option value="Concluído">Concluído</option>
         </Select>
-        <Input 
-          placeholder="Categoria..." 
+        <Input
+          aria-label="Filtrar por categoria"
+          placeholder="Categoria..."
           className="w-48"
-          value={filters.category || ''}
-          onChange={e => setFilters({ ...filters, category: e.target.value })}
+          value={filters.category ?? ''}
+          onChange={(event) => setFilters({ ...filters, category: event.target.value })}
         />
-        <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer px-2">
-          <input 
-            type="checkbox" 
-            checked={filters.includeArchived || false}
-            onChange={e => setFilters({ ...filters, includeArchived: e.target.checked })}
+        <label className="flex cursor-pointer items-center gap-2 px-2 text-sm text-text-muted">
+          <input
+            type="checkbox"
+            checked={filters.includeArchived ?? false}
+            onChange={(event) => setFilters({ ...filters, includeArchived: event.target.checked })}
             className="rounded border-border bg-surface text-lane-a focus:ring-lane-a"
           />
           Incluir arquivados
         </label>
       </div>
 
+      <FeedbackMessage message={feedback?.text} tone={feedback?.tone} className="mb-4" />
+      {isError && <FeedbackMessage message={getErrorMessage(error, 'Não foi possível carregar os cursos.')} className="mb-4" />}
+
       <div className="flex-1 overflow-auto rounded-xl border border-border bg-surface">
-        <table className="w-full text-left text-sm border-collapse min-w-[900px]">
-          <thead className="sticky top-0 bg-surface-raised border-b border-border z-10">
+        <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+          <thead className="sticky top-0 z-10 border-b border-border bg-surface-raised">
             <tr>
+              <th className="px-4 py-3 font-medium text-text-muted">Instituição</th>
               <th className="px-4 py-3 font-medium text-text-muted">Curso</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-40">Instituição</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-32">Categoria</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-32">Status</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-32">Período</th>
-              <th className="px-4 py-3 font-medium text-text-muted w-24 text-center">Diplomas</th>
-              <th className="px-4 py-3 font-medium text-text-muted text-right w-24">Ações</th>
+              <th className="w-32 px-4 py-3 font-medium text-text-muted">Categoria</th>
+              <th className="w-32 px-4 py-3 font-medium text-text-muted">Status</th>
+              <th className="w-28 px-4 py-3 font-medium text-text-muted">Prioridade</th>
+              <th className="w-28 px-4 py-3 font-medium text-text-muted">Início</th>
+              <th className="w-28 px-4 py-3 font-medium text-text-muted">Conclusão</th>
+              <th className="w-24 px-4 py-3 text-center font-medium text-text-muted">Diploma</th>
+              <th className="w-36 px-4 py-3 text-right font-medium text-text-muted">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">Carregando cursos...</td>
-              </tr>
+              <tr><td colSpan={9} className="px-4 py-10 text-center text-text-muted">Carregando cursos...</td></tr>
             ) : courses && courses.length > 0 ? (
-              courses.map(c => (
-                <tr key={c.id} className="border-b border-border/50 hover:bg-surface-soft/50 transition-colors group">
+              courses.map((course) => (
+                <tr key={course.id} className="group border-b border-border/50 transition-colors hover:bg-surface-soft/50 focus-within:bg-surface-soft/50">
+                  <td className="px-4 py-3 text-text-muted">{course.institution || '—'}</td>
                   <td className="px-4 py-3">
-                    <p className={`font-medium ${c.archived ? 'text-text-muted line-through' : 'text-text'}`}>{c.title}</p>
-                    {c.priority && (
-                      <span className={`text-[10px] font-semibold uppercase tracking-wide ${
-                        c.priority === 'Alta' ? 'text-danger' : 
-                        c.priority === 'Média' ? 'text-lane-b' : 'text-success'
-                      }`}>
-                        Prioridade {c.priority}
-                      </span>
-                    )}
+                    <p className={`font-medium ${course.archived ? 'text-text-muted line-through' : 'text-text'}`}>{course.title}</p>
                   </td>
-                  <td className="px-4 py-3 text-text-muted">{c.institution || '-'}</td>
-                  <td className="px-4 py-3 text-text-muted">{c.category || '-'}</td>
+                  <td className="px-4 py-3 text-text-muted">{course.category || '—'}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={c.status === 'Concluído' ? 'success' : c.status === 'Planejado' ? 'neutral' : 'lane-a'}>
-                      {c.status}
-                    </Badge>
+                    <Badge variant={course.status === 'Concluído' ? 'success' : course.status === 'Planejado' ? 'neutral' : 'lane-a'}>{course.status}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-text-muted text-xs">
-                    {c.startedOn || '?'} {c.completedOn ? `até ${c.completedOn}` : ''}
+                  <td className="px-4 py-3">
+                    <span className={course.priority === 'Alta' ? 'text-danger' : course.priority === 'Média' ? 'text-lane-b' : 'text-text-muted'}>
+                      {course.priority || '—'}
+                    </span>
                   </td>
+                  <td className="px-4 py-3 font-mono text-xs text-text-muted">{course.startedOn || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-text-muted">{course.completedOn || '—'}</td>
                   <td className="px-4 py-3 text-center">
-                    {c.credentialCount > 0 ? (
-                      <Badge variant="lane-b" className="gap-1 px-1.5"><GraduationCap className="h-3 w-3" /> {c.credentialCount}</Badge>
-                    ) : (
-                      <span className="text-text-muted opacity-50">-</span>
-                    )}
+                    {course.credentialCount > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/credentials?course=${course.id}`)}
+                        className="gap-1 text-lane-b"
+                        title="Ver diplomas vinculados"
+                      >
+                        <GraduationCap className="h-4 w-4" aria-hidden="true" /> {course.credentialCount}
+                      </Button>
+                    ) : course.status === 'Concluído' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/credentials?course=${course.id}`)}
+                        title="Ir para diplomas"
+                      >
+                        Adicionar
+                      </Button>
+                    ) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(c)} title="Editar">
-                        <Pencil className="h-4 w-4" />
+                    <div className="flex justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <Button variant="ghost" size="icon" onClick={() => setEditingCourse(course)} title="Editar" aria-label={`Editar ${course.title}`}>
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                       </Button>
-                      {c.archived ? (
-                        <Button variant="ghost" size="icon" onClick={() => handleRestore(c.id)} title="Restaurar">
-                          <ArchiveRestore className="h-4 w-4" />
+                      {course.archived ? (
+                        <Button variant="ghost" size="icon" onClick={() => handleRestore(course)} title="Restaurar" aria-label={`Restaurar ${course.title}`}>
+                          <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       ) : (
-                        <Button variant="ghost" size="icon" onClick={() => handleArchive(c.id)} title="Arquivar" className="hover:text-danger">
-                          <Archive className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" onClick={() => setArchiveCandidate(course)} title="Arquivar" aria-label={`Arquivar ${course.title}`} className="hover:text-danger">
+                          <Archive className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       )}
                     </div>
@@ -160,23 +203,24 @@ export default function CoursesScreen() {
                 </tr>
               ))
             ) : (
-              <tr>
-                <td colSpan={7}>
-                  <EmptyState 
-                    title="Nenhum curso encontrado"
-                    description="Não há cursos que correspondam aos filtros atuais."
-                  />
-                </td>
-              </tr>
+              <tr><td colSpan={9}><EmptyState title="Nenhum curso encontrado" description="Ajuste os filtros ou cadastre o primeiro curso." /></td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <CourseModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        courseToEdit={editingCourse}
+      {(isCreating || editingCourse) && (
+        <CourseModal key={editingCourse?.id ?? 'new'} onClose={closeEditor} courseToEdit={editingCourse} />
+      )}
+
+      <ConfirmDialog
+        isOpen={Boolean(archiveCandidate)}
+        title="Arquivar curso"
+        description={`“${archiveCandidate?.title ?? ''}” sairá das listas ativas. Os diplomas vinculados permanecerão no acervo.`}
+        confirmLabel="Arquivar curso"
+        isPending={archiveMutation.isPending}
+        onCancel={() => setArchiveCandidate(null)}
+        onConfirm={handleArchive}
       />
     </div>
   );

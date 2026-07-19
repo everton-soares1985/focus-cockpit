@@ -21,8 +21,9 @@ test('runDemoSeed executes all inserts and commits successfully', async () => {
 
   expect(mockExecute).toHaveBeenCalledWith('BEGIN TRANSACTION');
   expect(mockExecute).toHaveBeenCalledWith('COMMIT');
-  // Check if it inserted 2 projects, 2 slots, 3 priorities, 2 courses, 2 credentials, 3 shortcuts = 14 inserts
-  expect(mockExecute).toHaveBeenCalledTimes(16); // BEGIN + 14 INSERTS + COMMIT
+  // 2 projects, 2 slots, 3 priorities, 4 timeline items, 3 notes,
+  // 2 courses, 2 credentials and 3 shortcuts = 21 writes.
+  expect(mockExecute).toHaveBeenCalledTimes(23); // BEGIN + 21 writes + COMMIT
 });
 
 test('runDemoSeed rolls back on error and rethrows', async () => {
@@ -59,6 +60,8 @@ test('clearDemoSeed removes only known demonstration records', async () => {
     removedCredentials: 3,
     removedShortcuts: 3,
     removedPriorities: 3,
+    removedPlanItems: 3,
+    removedPlanNotes: 3,
   });
   expect(mockExecute).toHaveBeenCalledWith('BEGIN IMMEDIATE');
   expect(mockExecute).toHaveBeenLastCalledWith('COMMIT');

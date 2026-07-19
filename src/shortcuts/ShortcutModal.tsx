@@ -1,173 +1,204 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { inspectSavedTarget } from '../platform/nativeFiles';
 import { useCreateShortcut, useUpdateShortcut } from './shortcutHooks';
-import { shortcutTargetTypeSchema, type Shortcut, type ShortcutDraftInput } from './shortcutSchema';
+import {
+  shortcutTargetTypeSchema,
+  type Shortcut,
+  type ShortcutDraftInput,
+} from './shortcutSchema';
 import { Button } from '../design-system/components/Button';
-import { Modal } from '../design-system/components/Modal';
-import { Input } from '../design-system/components/Input';
-import { Select } from '../design-system/components/Select';
 import { Checkbox } from '../design-system/components/Checkbox';
+import {
+  FeedbackMessage,
+  getErrorMessage,
+} from '../design-system/components/FeedbackMessage';
+import { Input } from '../design-system/components/Input';
+import { Modal } from '../design-system/components/Modal';
+import { Select } from '../design-system/components/Select';
 import { Textarea } from '../design-system/components/Textarea';
 
+export const shortcutCategories = [
+  'Favoritos',
+  'Carreira e portfólio',
+  'Estudos',
+  'Projetos',
+  'Documentos',
+  'Pessoal',
+] as const;
+
+function initialShortcutDraft(shortcut: Shortcut | null): ShortcutDraftInput {
+  if (!shortcut) {
+    return {
+      label: '',
+      targetType: 'folder',
+      path: '',
+      category: '',
+      notes: '',
+      favorite: false,
+      sortOrder: 0,
+    };
+  }
+  return {
+    label: shortcut.label,
+    targetType: shortcut.targetType,
+    path: shortcut.path,
+    category: shortcut.category ?? '',
+    notes: shortcut.notes ?? '',
+    favorite: shortcut.favorite,
+    sortOrder: shortcut.sortOrder,
+  };
+}
+
 export function ShortcutModal({
-  isOpen,
   onClose,
   shortcutToEdit,
 }: {
-  isOpen: boolean;
   onClose: () => void;
   shortcutToEdit: Shortcut | null;
 }) {
-  const isEditing = !!shortcutToEdit;
-
+  const isEditing = Boolean(shortcutToEdit);
   const createMutation = useCreateShortcut();
   const updateMutation = useUpdateShortcut();
-
-  const [formData, setFormData] = useState<ShortcutDraftInput>({
-    label: '',
-    targetType: 'folder',
-    path: '',
-    category: '',
-    notes: '',
-    favorite: false,
-    sortOrder: 0,
-  });
-
-  useEffect(() => {
-    if (isOpen) {
-      if (shortcutToEdit) {
-        setFormData({
-          label: shortcutToEdit.label,
-          targetType: shortcutToEdit.targetType,
-          path: shortcutToEdit.path,
-          category: shortcutToEdit.category || '',
-          notes: shortcutToEdit.notes || '',
-          favorite: shortcutToEdit.favorite,
-          sortOrder: shortcutToEdit.sortOrder,
-        });
-      } else {
-        setFormData({
-          label: '',
-          targetType: 'folder',
-          path: '',
-          category: '',
-          notes: '',
-          favorite: false,
-          sortOrder: 0,
-        });
-      }
-    }
-  }, [isOpen, shortcutToEdit]);
+  const [formData, setFormData] = useState<ShortcutDraftInput>(() =>
+    initialShortcutDraft(shortcutToEdit),
+  );
+  const [error, setError] = useState<string | null>(null);
 
   const handleBrowse = async () => {
     try {
+      setError(null);
       const selected = await open({
         directory: formData.targetType === 'folder',
         multiple: false,
       });
       if (selected && !Array.isArray(selected)) {
-        setFormData({ ...formData, path: selected as string });
+        setFormData((current) => ({ ...current, path: selected }));
       }
-    } catch (e: any) {
-      alert(`Erro ao selecionar: ${e.message}`);
+    } catch (selectionError: unknown) {
+      setError(getErrorMessage(selectionError, 'Não foi possível selecionar o destino.'));
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     try {
-      const payload = {
-        ...formData,
-        category: formData.category?.trim() || null,
-        notes: formData.notes?.trim() || null,
-      };
-
-      if (isEditing) {
-        await updateMutation.mutateAsync({ id: shortcutToEdit.id, input: payload as any });
+      setError(null);
+      const status = await inspectSavedTarget(formData.path, formData.targetType);
+      if (status.blocked) {
+        setError('Esse tipo de arquivo é bloqueado por segurança.');
+        return;
+      }
+      if (status.exists && !status.targetTypeMatches) {
+        setError(`O caminho selecionado não aponta para ${formData.targetType === 'folder' ? 'uma pasta' : 'um arquivo'}.`);
+        return;
+      }
+      if (shortcutToEdit) {
+        await updateMutation.mutateAsync({ id: shortcutToEdit.id, input: formData });
       } else {
-        await createMutation.mutateAsync(payload as any);
+        await createMutation.mutateAsync(formData);
       }
       onClose();
-    } catch (error: any) {
-      alert(`Erro ao salvar atalho: ${error.message}`);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, 'Não foi possível salvar o atalho.'));
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Editar Atalho' : 'Novo Atalho'}>
+    <Modal isOpen onClose={onClose} title={isEditing ? 'Editar atalho' : 'Novo atalho'}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Tipo do Atalho</label>
-            <Select 
-              value={formData.targetType} 
-              onChange={e => setFormData({ ...formData, targetType: e.target.value as any, path: '' })} // clear path when type changes
+            <label htmlFor="shortcut-type" className="mb-1.5 block text-sm font-medium text-text-muted">Tipo</label>
+            <Select
+              id="shortcut-type"
+              value={formData.targetType}
+              onChange={(event) => setFormData({
+                ...formData,
+                targetType: event.target.value as ShortcutDraftInput['targetType'],
+                path: '',
+              })}
             >
-              {shortcutTargetTypeSchema.options.map(opt => <option key={opt} value={opt}>{opt === 'folder' ? 'Pasta' : 'Arquivo'}</option>)}
+              {shortcutTargetTypeSchema.options.map((option) => (
+                <option key={option} value={option}>{option === 'folder' ? 'Pasta' : 'Arquivo'}</option>
+              ))}
             </Select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1.5">Nome do Atalho</label>
-            <Input 
-              value={formData.label} 
-              onChange={e => setFormData({ ...formData, label: e.target.value })}
+            <label htmlFor="shortcut-label" className="mb-1.5 block text-sm font-medium text-text-muted">Nome</label>
+            <Input
+              id="shortcut-label"
+              value={formData.label}
+              onChange={(event) => setFormData({ ...formData, label: event.target.value })}
               required
               autoFocus
+              maxLength={120}
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1.5">Caminho / Path</label>
+          <label htmlFor="shortcut-path" className="mb-1.5 block text-sm font-medium text-text-muted">Caminho</label>
           <div className="flex gap-2">
-            <Input 
-              value={formData.path} 
-              onChange={e => setFormData({ ...formData, path: e.target.value })}
+            <Input
+              id="shortcut-path"
+              value={formData.path}
+              onChange={(event) => setFormData({ ...formData, path: event.target.value })}
               required
+              maxLength={2048}
               className="flex-1"
-              placeholder={formData.targetType === 'folder' ? 'C:\\Pastas...' : 'C:\\Arquivo.pdf'}
+              placeholder={formData.targetType === 'folder' ? 'C:\\Pastas\\...' : 'C:\\Arquivo.pdf'}
             />
-            <Button type="button" variant="secondary" onClick={handleBrowse}>Buscar</Button>
+            <Button type="button" variant="secondary" onClick={handleBrowse}>Selecionar</Button>
           </div>
+          <p className="mt-1 text-xs text-text-muted">O app apenas guarda o caminho; não move nem copia o item original.</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1.5">Categoria (Opcional)</label>
-          <Input 
-            value={formData.category || ''} 
-            onChange={e => setFormData({ ...formData, category: e.target.value })}
-            placeholder="Ex: Projetos de Clientes"
+          <label htmlFor="shortcut-category" className="mb-1.5 block text-sm font-medium text-text-muted">Categoria</label>
+          <Input
+            id="shortcut-category"
+            list="shortcut-category-options"
+            value={formData.category ?? ''}
+            onChange={(event) => setFormData({ ...formData, category: event.target.value })}
+            placeholder="Escolha ou escreva uma categoria"
+            maxLength={80}
           />
+          <datalist id="shortcut-category-options">
+            {shortcutCategories.map((category) => <option key={category} value={category} />)}
+          </datalist>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-muted mb-1.5">Anotações</label>
-          <Textarea 
-            value={formData.notes || ''} 
-            onChange={e => setFormData({ ...formData, notes: e.target.value })}
+          <label htmlFor="shortcut-notes" className="mb-1.5 block text-sm font-medium text-text-muted">Observação</label>
+          <Textarea
+            id="shortcut-notes"
+            value={formData.notes ?? ''}
+            onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
             rows={2}
+            maxLength={1000}
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Checkbox 
-            checked={formData.favorite}
-            onChange={e => setFormData({ ...formData, favorite: e.target.checked })}
-            id="fav-checkbox"
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
+          <Checkbox
+            checked={formData.favorite ?? false}
+            onChange={(event) => setFormData({ ...formData, favorite: event.target.checked })}
           />
-          <label htmlFor="fav-checkbox" className="text-sm text-text cursor-pointer">
-            Marcar como Favorito (aparece no Focus Cockpit)
-          </label>
-        </div>
+          Mostrar nos atalhos rápidos da aba Foco
+        </label>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+        <FeedbackMessage message={error} />
+        <div className="flex justify-end gap-3 border-t border-border pt-4">
           <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-            {isEditing ? 'Salvar Alterações' : 'Criar Atalho'}
+            {createMutation.isPending || updateMutation.isPending
+              ? 'Salvando...'
+              : isEditing
+                ? 'Salvar alterações'
+                : 'Criar atalho'}
           </Button>
         </div>
-        
       </form>
     </Modal>
   );
