@@ -3,6 +3,7 @@ use rusqlite::{params, Connection, ErrorCode};
 const INITIAL_MIGRATION: &str = include_str!("../../migrations/01_initial.sql");
 const DOMAIN_RULES_MIGRATION: &str = include_str!("../../migrations/02_domain_rules.sql");
 const WRITE_SAFETY_MIGRATION: &str = include_str!("../../migrations/03_write_safety.sql");
+const BOOKS_MIGRATION: &str = include_str!("../../migrations/04_books.sql");
 
 fn migrated_database() -> Connection {
     let connection = Connection::open_in_memory().expect("open in-memory sqlite");
@@ -15,6 +16,9 @@ fn migrated_database() -> Connection {
     connection
         .execute_batch(WRITE_SAFETY_MIGRATION)
         .expect("apply write safety migration");
+    connection
+        .execute_batch(BOOKS_MIGRATION)
+        .expect("apply books migration");
     connection
 }
 
@@ -38,7 +42,7 @@ fn migrations_create_expected_schema_and_empty_focus_slots() {
              WHERE type = 'table'
                AND name IN (
                  'projects', 'focus_slots', 'weekly_priorities', 'plan_items',
-                 'plan_notes', 'courses', 'credentials', 'shortcuts'
+                 'plan_notes', 'courses', 'credentials', 'shortcuts', 'books'
                )",
             [],
             |row| row.get(0),
@@ -48,7 +52,7 @@ fn migrations_create_expected_schema_and_empty_focus_slots() {
         .query_row("SELECT COUNT(*) FROM focus_slots", [], |row| row.get(0))
         .expect("count focus slots");
 
-    assert_eq!(table_count, 8);
+    assert_eq!(table_count, 9);
     assert_eq!(slot_count, 2);
 }
 
@@ -269,6 +273,69 @@ fn archiving_a_course_keeps_its_credential() {
 }
 
 #[test]
+fn books_enforce_progress_pages_rating_and_status_rules() {
+    let connection = migrated_database();
+
+    for invalid_statement in [
+        "INSERT INTO books (
+            id, title, status, progress_percent, created_at, updated_at
+         ) VALUES ('invalid-progress', 'Book', 'Lendo', 101, datetime('now'), datetime('now'))",
+        "INSERT INTO books (
+            id, title, status, progress_percent, current_page, total_pages,
+            created_at, updated_at
+         ) VALUES (
+            'invalid-pages', 'Book', 'Lendo', 50, 201, 200,
+            datetime('now'), datetime('now')
+         )",
+        "INSERT INTO books (
+            id, title, status, progress_percent, rating, created_at, updated_at
+         ) VALUES (
+            'invalid-rating', 'Book', 'Concluído', 100, 6,
+            datetime('now'), datetime('now')
+         )",
+        "INSERT INTO books (
+            id, title, status, progress_percent, created_at, updated_at
+         ) VALUES (
+            'invalid-status', 'Book', 'Unknown', 0,
+            datetime('now'), datetime('now')
+         )",
+    ] {
+        let error = connection
+            .execute(invalid_statement, [])
+            .expect_err("invalid book must fail");
+        assert_eq!(
+            error.sqlite_error_code(),
+            Some(ErrorCode::ConstraintViolation)
+        );
+    }
+}
+
+#[test]
+fn deleting_a_book_only_removes_its_database_record() {
+    let connection = migrated_database();
+    connection
+        .execute(
+            "INSERT INTO books (
+                id, title, status, progress_percent, file_path, created_at, updated_at
+             ) VALUES (
+                'book-1', 'Book', 'Lendo', 25, 'C:\\Books\\book.pdf',
+                datetime('now'), datetime('now')
+             )",
+            [],
+        )
+        .expect("insert book");
+
+    connection
+        .execute("DELETE FROM books WHERE id = 'book-1'", [])
+        .expect("delete book");
+
+    let book_count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))
+        .expect("count books");
+    assert_eq!(book_count, 0);
+}
+
+#[test]
 fn sqlite_accepts_a_bound_vacuum_destination() {
     let connection = migrated_database();
     let destination = std::env::temp_dir().join(format!(
@@ -289,7 +356,7 @@ fn sqlite_accepts_a_bound_vacuum_destination() {
             |row| row.get(0),
         )
         .expect("count snapshot tables");
-    assert!(table_count >= 8);
+    assert!(table_count >= 9);
     drop(snapshot);
     let _ = std::fs::remove_file(destination);
 }

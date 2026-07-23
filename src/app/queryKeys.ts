@@ -6,6 +6,7 @@ export const queryKeys = {
   planItems: ['plan-items'] as const,
   planNotes: ['plan-notes'] as const,
   courses: ['courses'] as const,
+  books: ['books'] as const,
   credentials: ['credentials'] as const,
   savedTargets: ['saved-targets'] as const,
 };

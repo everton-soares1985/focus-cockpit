@@ -6,6 +6,13 @@
   "permissions": [
     "core:default",
     "dialog:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "http://*" },
+        { "url": "https://*" }
+      ]
+    },
     "sql:default",
     "sql:allow-execute"
   ]
