@@ -5,6 +5,7 @@ import FocusScreen from '../focus/FocusScreen';
 import PlanScreen from '../plan/PlanScreen';
 import ProjectsScreen from '../projects/ProjectsScreen';
 import CoursesScreen from '../courses/CoursesScreen';
+import BooksScreen from '../books/BooksScreen';
 import CredentialsScreen from '../credentials/CredentialsScreen';
 import FilesScreen from '../shortcuts/FilesScreen';
 
@@ -28,6 +29,10 @@ export const router = createBrowserRouter([
       {
         path: 'courses',
         element: <CoursesScreen />,
+      },
+      {
+        path: 'books',
+        element: <BooksScreen />,
       },
       {
         path: 'credentials',

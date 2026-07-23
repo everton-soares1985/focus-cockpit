@@ -31,6 +31,7 @@ export default function AppShell() {
            UNION ALL SELECT 1 FROM plan_items
            UNION ALL SELECT 1 FROM plan_notes
            UNION ALL SELECT 1 FROM courses
+           UNION ALL SELECT 1 FROM books
            UNION ALL SELECT 1 FROM credentials
            UNION ALL SELECT 1 FROM shortcuts
          ) AS initialized`,

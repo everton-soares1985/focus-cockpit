@@ -25,6 +25,12 @@ pub fn run() {
             sql: include_str!("../migrations/03_write_safety.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        tauri_plugin_sql::Migration {
+            version: 4,
+            description: "add_personal_books_library",
+            sql: include_str!("../migrations/04_books.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

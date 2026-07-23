@@ -1,5 +1,6 @@
 import {
   Award,
+  BookOpen,
   FileText,
   FolderOpen,
   GraduationCap,
@@ -13,6 +14,7 @@ const tabs = [
   { path: '/plan', label: 'Plano', icon: ListChecks },
   { path: '/projects', label: 'Projetos', icon: FolderOpen },
   { path: '/courses', label: 'Cursos', icon: GraduationCap },
+  { path: '/books', label: 'Livros', icon: BookOpen },
   { path: '/credentials', label: 'Diplomas', icon: Award },
   { path: '/files', label: 'Arquivos', icon: FileText },
 ];
@@ -21,7 +23,7 @@ export default function WorkbookTabs() {
   return (
     <div className="shrink-0 bg-bg px-5 pb-4 pt-2">
       <nav
-        className="mx-auto flex h-14 max-w-5xl gap-1 rounded-full border border-border bg-surface p-1.5 shadow-xl"
+        className="mx-auto flex h-14 max-w-6xl gap-1 rounded-full border border-border bg-surface p-1.5 shadow-xl"
         aria-label="Navegação principal"
       >
         {tabs.map((tab) => {
