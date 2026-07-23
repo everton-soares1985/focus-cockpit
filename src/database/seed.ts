@@ -1,6 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
 import { getWeekStart } from '../focus/week';
-import { withTransaction } from './transaction';
 
 export interface DemoCleanupResult {
   removedProjects: number;
@@ -14,8 +13,6 @@ export interface DemoCleanupResult {
 
 export async function runDemoSeed(db: Database) {
   const currentWeek = getWeekStart();
-  try {
-    await db.execute('BEGIN TRANSACTION');
 
     // 2 Projects
     await db.execute(
@@ -154,50 +151,43 @@ export async function runDemoSeed(db: Database) {
       ["short-3", "Anotações Reunião", "file", "C:\\Demo\\Documentos\\reuniao.md", "Geral"]
     );
 
-    await db.execute('COMMIT');
-  } catch (error) {
-    await db.execute('ROLLBACK');
-    throw error;
-  }
 }
 
 export async function clearDemoSeed(db: Database): Promise<DemoCleanupResult> {
-  return withTransaction(db, async () => {
-    await db.execute(
-      `UPDATE focus_slots SET project_id = NULL, updated_at = $1
-       WHERE project_id IN ('proj-demo-1', 'proj-demo-2')`,
-      [new Date().toISOString()],
-    );
-    const priorities = await db.execute(
-      `DELETE FROM weekly_priorities
-       WHERE id IN ('prio-1', 'prio-2', 'prio-3')`,
-    );
-    const credentials = await db.execute(
-      `DELETE FROM credentials WHERE id IN ('cred-1', 'cred-2')`,
-    );
-    const planItems = await db.execute(
-      `DELETE FROM plan_items WHERE id IN ('plan-demo-1', 'plan-demo-2', 'plan-demo-3', 'plan-demo-4')`,
-    );
-    const planNotes = await db.execute(
-      `DELETE FROM plan_notes WHERE id IN ('note-demo-1', 'note-demo-2', 'note-demo-3')`,
-    );
-    const projects = await db.execute(
-      `DELETE FROM projects WHERE id IN ('proj-demo-1', 'proj-demo-2')`,
-    );
-    const courses = await db.execute(
-      `DELETE FROM courses WHERE id IN ('course-1', 'course-2')`,
-    );
-    const shortcuts = await db.execute(
-      `DELETE FROM shortcuts WHERE id IN ('short-1', 'short-2', 'short-3')`,
-    );
-    return {
-      removedProjects: projects.rowsAffected,
-      removedCourses: courses.rowsAffected,
-      removedCredentials: credentials.rowsAffected,
-      removedShortcuts: shortcuts.rowsAffected,
-      removedPriorities: priorities.rowsAffected,
-      removedPlanItems: planItems.rowsAffected,
-      removedPlanNotes: planNotes.rowsAffected,
-    };
-  });
+  await db.execute(
+    `UPDATE focus_slots SET project_id = NULL, updated_at = $1
+     WHERE project_id IN ('proj-demo-1', 'proj-demo-2')`,
+    [new Date().toISOString()],
+  );
+  const priorities = await db.execute(
+    `DELETE FROM weekly_priorities
+     WHERE id IN ('prio-1', 'prio-2', 'prio-3')`,
+  );
+  const credentials = await db.execute(
+    `DELETE FROM credentials WHERE id IN ('cred-1', 'cred-2')`,
+  );
+  const planItems = await db.execute(
+    `DELETE FROM plan_items WHERE id IN ('plan-demo-1', 'plan-demo-2', 'plan-demo-3', 'plan-demo-4')`,
+  );
+  const planNotes = await db.execute(
+    `DELETE FROM plan_notes WHERE id IN ('note-demo-1', 'note-demo-2', 'note-demo-3')`,
+  );
+  const projects = await db.execute(
+    `DELETE FROM projects WHERE id IN ('proj-demo-1', 'proj-demo-2')`,
+  );
+  const courses = await db.execute(
+    `DELETE FROM courses WHERE id IN ('course-1', 'course-2')`,
+  );
+  const shortcuts = await db.execute(
+    `DELETE FROM shortcuts WHERE id IN ('short-1', 'short-2', 'short-3')`,
+  );
+  return {
+    removedProjects: projects.rowsAffected,
+    removedCourses: courses.rowsAffected,
+    removedCredentials: credentials.rowsAffected,
+    removedShortcuts: shortcuts.rowsAffected,
+    removedPriorities: priorities.rowsAffected,
+    removedPlanItems: planItems.rowsAffected,
+    removedPlanNotes: planNotes.rowsAffected,
+  };
 }

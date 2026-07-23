@@ -160,3 +160,10 @@ export async function restoreShortcut(db: Database, id: string): Promise<void> {
     throw new Error('Atalho não encontrado.');
   }
 }
+
+export async function deleteShortcutRecord(db: Database, id: string): Promise<void> {
+  const result = await db.execute('DELETE FROM shortcuts WHERE id = $1', [id]);
+  if (result.rowsAffected !== 1) {
+    throw new Error('Atalho não encontrado.');
+  }
+}

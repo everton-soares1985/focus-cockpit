@@ -4,6 +4,7 @@ import { getDb } from '../database/db';
 import {
   archiveCourse,
   createCourse,
+  deleteCourseRecord,
   listCourses,
   restoreCourse,
   updateCourse,
@@ -51,6 +52,14 @@ export function useRestoreCourse() {
   const refresh = useRefreshCourses();
   return useMutation({
     mutationFn: async (id: string) => restoreCourse(await getDb(), id),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeleteCourse() {
+  const refresh = useRefreshCourses();
+  return useMutation({
+    mutationFn: async (id: string) => deleteCourseRecord(await getDb(), id),
     onSuccess: refresh,
   });
 }

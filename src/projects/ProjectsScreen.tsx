@@ -7,9 +7,11 @@ import {
   Plus,
   Search,
   Target,
+  Trash2,
 } from 'lucide-react';
 import {
   useArchiveProject,
+  useDeleteProject,
   useProjects,
   useRestoreProject,
 } from './projectHooks';
@@ -41,6 +43,7 @@ function ProjectTableRow({
   project,
   onArchive,
   onRestore,
+  onDelete,
   onEdit,
   onSetFocus,
   onOpenError,
@@ -48,6 +51,7 @@ function ProjectTableRow({
   project: Project;
   onArchive: (project: Project) => void;
   onRestore: (project: Project) => void;
+  onDelete: (project: Project) => void;
   onEdit: (project: Project) => void;
   onSetFocus: (project: Project) => void;
   onOpenError: (error: unknown) => void;
@@ -136,6 +140,16 @@ function ProjectTableRow({
               <Archive className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDelete(project)}
+            title="Remover do app"
+            aria-label={`Remover ${project.name} do app`}
+            className="hover:text-danger"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
         </div>
       </td>
     </tr>
@@ -152,10 +166,12 @@ export default function ProjectsScreen() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [archiveCandidate, setArchiveCandidate] = useState<Project | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<Project | null>(null);
   const [feedback, setFeedback] = useState<ScreenFeedback>(null);
 
   const { data: projects, isLoading, isError, error } = useProjects(filters);
   const archiveMutation = useArchiveProject();
+  const deleteMutation = useDeleteProject();
   const restoreMutation = useRestoreProject();
   const setFocusProject = useSetFocusProject();
 
@@ -177,6 +193,18 @@ export default function ProjectsScreen() {
       setFeedback({ tone: 'success', text: `“${project.name}” foi restaurado.` });
     } catch (restoreError: unknown) {
       setFeedback({ tone: 'error', text: getErrorMessage(restoreError, 'Não foi possível restaurar o projeto.') });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteCandidate) return;
+    try {
+      setFeedback(null);
+      await deleteMutation.mutateAsync(deleteCandidate.id);
+      setFeedback({ tone: 'success', text: `“${deleteCandidate.name}” foi removido somente do Focus Cockpit.` });
+      setDeleteCandidate(null);
+    } catch (deleteError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(deleteError, 'Não foi possível remover o projeto do app.') });
     }
   };
 
@@ -279,6 +307,7 @@ export default function ProjectsScreen() {
                   project={project}
                   onArchive={setArchiveCandidate}
                   onRestore={handleRestore}
+                  onDelete={setDeleteCandidate}
                   onEdit={setEditingProject}
                   onSetFocus={handleSetFocus}
                   onOpenError={(openError) => setFeedback({ tone: 'error', text: getErrorMessage(openError, 'Não foi possível abrir a pasta.') })}
@@ -311,6 +340,15 @@ export default function ProjectsScreen() {
         isPending={archiveMutation.isPending}
         onCancel={() => setArchiveCandidate(null)}
         onConfirm={handleArchive}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(deleteCandidate)}
+        title="Remover projeto do app"
+        description={`“${deleteCandidate?.name ?? ''}” será apagado do banco do Focus Cockpit. Nenhuma pasta ou arquivo do computador será excluído.`}
+        confirmLabel="Remover somente do app"
+        isPending={deleteMutation.isPending}
+        onCancel={() => setDeleteCandidate(null)}
+        onConfirm={handleDelete}
       />
     </div>
   );

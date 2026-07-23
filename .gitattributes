@@ -1,0 +1,2 @@
+# SQLx migration checksums depend on exact bytes. Keep applied migrations stable on Windows.
+src-tauri/migrations/*.sql text eol=lf

@@ -181,3 +181,10 @@ export async function archiveProject(db: Database, id: string): Promise<void> {
 export async function restoreProject(db: Database, id: string): Promise<void> {
   await setProjectArchived(db, id, false);
 }
+
+export async function deleteProjectRecord(db: Database, id: string): Promise<void> {
+  const result = await db.execute('DELETE FROM projects WHERE id = $1', [id]);
+  if (result.rowsAffected !== 1) {
+    throw new Error('Projeto não encontrado.');
+  }
+}

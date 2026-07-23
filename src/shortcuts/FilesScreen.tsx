@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Star,
+  Trash2,
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -20,6 +21,7 @@ import {
 import { useSavedTargetStatus } from '../platform/savedTargetHooks';
 import {
   useArchiveShortcut,
+  useDeleteShortcut,
   useRestoreShortcut,
   useShortcuts,
   useUpdateShortcut,
@@ -64,6 +66,7 @@ function ShortcutTableRow({
   shortcut,
   onArchive,
   onRestore,
+  onDelete,
   onEdit,
   onFavorite,
   onOpen,
@@ -73,6 +76,7 @@ function ShortcutTableRow({
   shortcut: Shortcut;
   onArchive: (shortcut: Shortcut) => void;
   onRestore: (shortcut: Shortcut) => void;
+  onDelete: (shortcut: Shortcut) => void;
   onEdit: (shortcut: Shortcut) => void;
   onFavorite: (shortcut: Shortcut) => void;
   onOpen: (shortcut: Shortcut) => void;
@@ -128,6 +132,9 @@ function ShortcutTableRow({
               <Archive className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
+          <Button variant="ghost" size="icon" onClick={() => onDelete(shortcut)} title="Remover do app" aria-label={`Remover ${shortcut.label} do app`} className="hover:text-danger">
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
         </div>
       </td>
     </tr>
@@ -144,10 +151,12 @@ export default function FilesScreen() {
   const [editingShortcut, setEditingShortcut] = useState<Shortcut | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [archiveCandidate, setArchiveCandidate] = useState<Shortcut | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<Shortcut | null>(null);
   const [feedback, setFeedback] = useState<ScreenFeedback>(null);
 
   const { data: shortcuts, isLoading, isError, error } = useShortcuts(filters);
   const archiveMutation = useArchiveShortcut();
+  const deleteMutation = useDeleteShortcut();
   const restoreMutation = useRestoreShortcut();
   const updateMutation = useUpdateShortcut();
 
@@ -169,6 +178,18 @@ export default function FilesScreen() {
       setFeedback({ tone: 'success', text: `“${shortcut.label}” foi restaurado.` });
     } catch (restoreError: unknown) {
       setFeedback({ tone: 'error', text: getErrorMessage(restoreError, 'Não foi possível restaurar o atalho.') });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteCandidate) return;
+    try {
+      setFeedback(null);
+      await deleteMutation.mutateAsync(deleteCandidate.id);
+      setFeedback({ tone: 'success', text: `“${deleteCandidate.label}” foi removido somente do Focus Cockpit.` });
+      setDeleteCandidate(null);
+    } catch (deleteError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(deleteError, 'Não foi possível remover o atalho do app.') });
     }
   };
 
@@ -309,6 +330,7 @@ export default function FilesScreen() {
                   shortcut={shortcut}
                   onArchive={setArchiveCandidate}
                   onRestore={handleRestore}
+                  onDelete={setDeleteCandidate}
                   onEdit={setEditingShortcut}
                   onFavorite={handleFavorite}
                   onOpen={handleOpen}
@@ -335,6 +357,15 @@ export default function FilesScreen() {
         isPending={archiveMutation.isPending}
         onCancel={() => setArchiveCandidate(null)}
         onConfirm={handleArchive}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(deleteCandidate)}
+        title="Remover atalho do app"
+        description={`“${deleteCandidate?.label ?? ''}” será apagado somente da lista do Focus Cockpit. O arquivo, a pasta e todo o conteúdo do caminho original permanecerão intocados.`}
+        confirmLabel="Remover somente do app"
+        isPending={deleteMutation.isPending}
+        onCancel={() => setDeleteCandidate(null)}
+        onConfirm={handleDelete}
       />
     </div>
   );

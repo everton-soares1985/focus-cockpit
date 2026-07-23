@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Target, Pencil, Trash2 } from 'lucide-react';
+import { CalendarDays, Pencil, Trash2 } from 'lucide-react';
 import { 
   useWeeklyPriorities, 
   useSaveWeeklyPriority, 
@@ -30,7 +30,7 @@ export function WeeklyPriorityBlock() {
     return (
       <div className="flex flex-col rounded-xl border border-border bg-surface p-5">
         <h3 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-          <Target className="h-5 w-5 text-lane-b" /> Esta semana
+          <CalendarDays className="h-5 w-5 text-lane-a" /> Hoje e esta semana
         </h3>
         <div className="animate-pulse space-y-3">
           <div className="h-10 bg-surface-raised rounded w-full"></div>
@@ -50,7 +50,7 @@ export function WeeklyPriorityBlock() {
   return (
     <div className="flex flex-col rounded-xl border border-border bg-surface p-5 h-full">
       <h3 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-        <Target className="h-5 w-5 text-lane-b" /> Esta semana
+        <CalendarDays className="h-5 w-5 text-lane-a" /> Hoje e esta semana
       </h3>
       <div className="space-y-3 flex-1">
         {safeSlots.map((slot) => (
@@ -127,6 +127,9 @@ function PriorityItem({
   return (
     <div className={`group rounded-lg border p-3 transition-colors focus-within:border-border-strong ${p.done ? 'border-success/30 bg-success/5' : 'border-border bg-surface-raised'}`}>
       <div className="flex items-start gap-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-lane-a/40 bg-lane-a/10 text-xs font-semibold text-lane-a">
+        {slot.position}
+      </span>
       <div className="pt-0.5">
         <Checkbox 
           checked={p.done} 

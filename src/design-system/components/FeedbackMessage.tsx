@@ -2,6 +2,13 @@ import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
 
 type FeedbackTone = 'error' | 'success' | 'info';
 
+function friendlyErrorMessage(message: string): string {
+  if (/database is locked|database is busy|SQLITE_BUSY|code:\s*5/i.test(message)) {
+    return 'O banco local estava ocupado. O Focus Cockpit tentou novamente, mas não conseguiu concluir. Feche uma eventual segunda janela do app e tente de novo.';
+  }
+  return message;
+}
+
 export function getErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null) {
     const candidate = error as {
@@ -12,14 +19,14 @@ export function getErrorMessage(error: unknown, fallback: string): string {
       (issue) => typeof issue.message === 'string',
     )?.message;
     if (typeof issueMessage === 'string' && issueMessage.trim()) {
-      return issueMessage;
+      return friendlyErrorMessage(issueMessage);
     }
     if (typeof candidate.message === 'string' && candidate.message.trim()) {
-      return candidate.message;
+      return friendlyErrorMessage(candidate.message);
     }
   }
   if (typeof error === 'string' && error.trim()) {
-    return error;
+    return friendlyErrorMessage(error);
   }
   return fallback;
 }

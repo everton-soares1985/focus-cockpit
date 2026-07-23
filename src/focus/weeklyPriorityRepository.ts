@@ -1,5 +1,4 @@
 import type Database from '@tauri-apps/plugin-sql';
-import { withTransaction } from '../database/transaction';
 import {
   weeklyPriorityDraftSchema,
   type WeeklyPriority,
@@ -60,41 +59,39 @@ export async function saveWeeklyPriority(
   input: WeeklyPriorityDraftInput,
 ): Promise<void> {
   const draft = weeklyPriorityDraftSchema.parse(input);
-  await withTransaction(db, async () => {
-    if (draft.projectId) {
-      const projects = await db.select<Array<{ archived: number }>>(
-        'SELECT archived FROM projects WHERE id = $1',
-        [draft.projectId],
-      );
-      if (!projects[0]) {
-        throw new Error('Projeto vinculado não encontrado.');
-      }
-      if (projects[0].archived === 1) {
-        throw new Error('Uma prioridade não pode usar um projeto arquivado.');
-      }
-    }
-
-    const timestamp = new Date().toISOString();
-    await db.execute(
-      `INSERT INTO weekly_priorities (
-         id, week_start, position, title, project_id, done, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-       ON CONFLICT(week_start, position) DO UPDATE SET
-         title = excluded.title,
-         project_id = excluded.project_id,
-         done = excluded.done,
-         updated_at = excluded.updated_at`,
-      [
-        crypto.randomUUID(),
-        draft.weekStart,
-        draft.position,
-        draft.title,
-        draft.projectId,
-        draft.done ? 1 : 0,
-        timestamp,
-      ],
+  if (draft.projectId) {
+    const projects = await db.select<Array<{ archived: number }>>(
+      'SELECT archived FROM projects WHERE id = $1',
+      [draft.projectId],
     );
-  });
+    if (!projects[0]) {
+      throw new Error('Projeto vinculado não encontrado.');
+    }
+    if (projects[0].archived === 1) {
+      throw new Error('Uma prioridade não pode usar um projeto arquivado.');
+    }
+  }
+
+  const timestamp = new Date().toISOString();
+  await db.execute(
+    `INSERT INTO weekly_priorities (
+       id, week_start, position, title, project_id, done, created_at, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+     ON CONFLICT(week_start, position) DO UPDATE SET
+       title = excluded.title,
+       project_id = excluded.project_id,
+       done = excluded.done,
+       updated_at = excluded.updated_at`,
+    [
+      crypto.randomUUID(),
+      draft.weekStart,
+      draft.position,
+      draft.title,
+      draft.projectId,
+      draft.done ? 1 : 0,
+      timestamp,
+    ],
+  );
 }
 
 export async function setWeeklyPriorityDone(

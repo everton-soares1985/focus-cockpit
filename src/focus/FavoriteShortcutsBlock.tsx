@@ -1,4 +1,4 @@
-import { Bookmark, ExternalLink } from 'lucide-react';
+import { ExternalLink, Zap } from 'lucide-react';
 import { useFavoriteShortcuts } from '../shortcuts/shortcutHooks';
 import { openSavedTarget } from '../platform/nativeFiles';
 import { Button } from '../design-system/components/Button';
@@ -70,7 +70,7 @@ export function FavoriteShortcutsBlock() {
   return (
     <div className="flex flex-col rounded-xl border border-border bg-surface p-5 h-full">
       <h3 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-        <Bookmark className="h-5 w-5 text-lane-a" /> Atalhos Rápidos
+        <Zap className="h-5 w-5 text-lane-a" /> Acesso rápido
       </h3>
       
       {isLoading ? (
@@ -91,7 +91,7 @@ export function FavoriteShortcutsBlock() {
         </div>
       ) : (
         <EmptyState 
-          icon={<Bookmark className="h-8 w-8" />}
+          icon={<Zap className="h-8 w-8" />}
           title="Nenhum atalho favorito"
           description="Você pode adicionar atalhos para pastas e arquivos importantes na aba Arquivos e marcá-los como favoritos."
           className="p-4"

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Download, Eye, FileText, Pencil, Plus, Search } from 'lucide-react';
+import { Download, Eye, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { useSearchParams } from 'react-router-dom';
-import { useCredentials } from './credentialHooks';
+import { useCredentials, useDeleteCredential } from './credentialHooks';
 import { exportCredential, openCredential } from '../platform/credentials';
 import type {
   Credential,
@@ -11,6 +11,7 @@ import type {
 } from './credentialSchema';
 import { Badge } from '../design-system/components/Badge';
 import { Button } from '../design-system/components/Button';
+import { ConfirmDialog } from '../design-system/components/ConfirmDialog';
 import { EmptyState } from '../design-system/components/EmptyState';
 import {
   FeedbackMessage,
@@ -42,8 +43,10 @@ export default function CredentialsScreen() {
   const [importSourcePath, setImportSourcePath] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<ScreenFeedback>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<Credential | null>(null);
 
   const { data: credentials, isLoading, isError, error } = useCredentials(filters);
+  const deleteMutation = useDeleteCredential();
 
   const handleImportClick = async () => {
     try {
@@ -95,6 +98,18 @@ export default function CredentialsScreen() {
       await openCredential(credential.storedPath);
     } catch (openError: unknown) {
       setFeedback({ tone: 'error', text: getErrorMessage(openError, 'Não foi possível abrir o diploma.') });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteCandidate) return;
+    try {
+      setFeedback(null);
+      await deleteMutation.mutateAsync(deleteCandidate.id);
+      setFeedback({ tone: 'success', text: `“${deleteCandidate.title}” foi removido somente do catálogo do Focus Cockpit.` });
+      setDeleteCandidate(null);
+    } catch (deleteError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(deleteError, 'Não foi possível remover o diploma do app.') });
     }
   };
 
@@ -212,6 +227,9 @@ export default function CredentialsScreen() {
                       }} title="Editar dados" aria-label={`Editar dados de ${credential.title}`}>
                         <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-danger" onClick={() => setDeleteCandidate(credential)} title="Remover do app" aria-label={`Remover ${credential.title} do app`}>
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -237,6 +255,15 @@ export default function CredentialsScreen() {
           preferredCourseId={filters.courseId}
         />
       )}
+      <ConfirmDialog
+        isOpen={Boolean(deleteCandidate)}
+        title="Remover diploma do app"
+        description={`“${deleteCandidate?.title ?? ''}” será removido somente do catálogo do Focus Cockpit. Nenhum PDF ou imagem original do computador será excluído.`}
+        confirmLabel="Remover somente do app"
+        isPending={deleteMutation.isPending}
+        onCancel={() => setDeleteCandidate(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

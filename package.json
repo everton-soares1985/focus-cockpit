@@ -1,7 +1,7 @@
 {
   "name": "focus-cockpit",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local-first desktop cockpit for personal focus, planning, projects, courses, credentials, and file shortcuts.",
   "license": "MIT",
   "packageManager": "pnpm@11.14.0",
