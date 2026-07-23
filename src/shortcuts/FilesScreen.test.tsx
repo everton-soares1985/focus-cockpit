@@ -24,6 +24,7 @@ vi.mock('./shortcutHooks', () => ({
     error: null,
   }),
   useArchiveShortcut: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteShortcut: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRestoreShortcut: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateShortcut: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCreateShortcut: () => ({ mutateAsync: vi.fn(), isPending: false }),

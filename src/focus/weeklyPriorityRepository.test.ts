@@ -45,6 +45,6 @@ describe('weekly priorities', () => {
         projectId: 'archived-project',
       }),
     ).rejects.toThrow('Uma prioridade não pode usar um projeto arquivado.');
-    expect(db.execute).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });

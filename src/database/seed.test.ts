@@ -12,21 +12,21 @@ vi.mock('@tauri-apps/plugin-sql', () => {
   };
 });
 
-test('runDemoSeed executes all inserts and commits successfully', async () => {
+test('runDemoSeed executes all demonstration writes without opening a pooled transaction', async () => {
   const mockExecute = vi.fn().mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockDb = { execute: mockExecute, select: vi.fn() } as any;
 
   await runDemoSeed(mockDb);
 
-  expect(mockExecute).toHaveBeenCalledWith('BEGIN TRANSACTION');
-  expect(mockExecute).toHaveBeenCalledWith('COMMIT');
   // 2 projects, 2 slots, 3 priorities, 4 timeline items, 3 notes,
   // 2 courses, 2 credentials and 3 shortcuts = 21 writes.
-  expect(mockExecute).toHaveBeenCalledTimes(23); // BEGIN + 21 writes + COMMIT
+  expect(mockExecute).toHaveBeenCalledTimes(21);
+  expect(mockExecute).not.toHaveBeenCalledWith('BEGIN IMMEDIATE');
+  expect(mockExecute).not.toHaveBeenCalledWith('COMMIT');
 });
 
-test('runDemoSeed rolls back on error and rethrows', async () => {
+test('runDemoSeed stops and rethrows on the first failed write', async () => {
   const mockExecute = vi.fn().mockImplementation((query: string) => {
     if (query.includes('projects')) {
       throw new Error('DB Error');
@@ -36,14 +36,11 @@ test('runDemoSeed rolls back on error and rethrows', async () => {
   const mockDb = { execute: mockExecute, select: vi.fn() } as any;
 
   await expect(runDemoSeed(mockDb)).rejects.toThrow('DB Error');
-  expect(mockExecute).toHaveBeenCalledWith('ROLLBACK');
+  expect(mockExecute).toHaveBeenCalledTimes(1);
 });
 
 test('clearDemoSeed removes only known demonstration records', async () => {
   const mockExecute = vi.fn().mockImplementation((query: string) => {
-    if (query === 'BEGIN IMMEDIATE' || query === 'COMMIT') {
-      return Promise.resolve({ rowsAffected: 0 });
-    }
     if (query.includes('focus_slots')) {
       return Promise.resolve({ rowsAffected: 2 });
     }
@@ -63,8 +60,7 @@ test('clearDemoSeed removes only known demonstration records', async () => {
     removedPlanItems: 3,
     removedPlanNotes: 3,
   });
-  expect(mockExecute).toHaveBeenCalledWith('BEGIN IMMEDIATE');
-  expect(mockExecute).toHaveBeenLastCalledWith('COMMIT');
+  expect(mockExecute).toHaveBeenCalledTimes(8);
   expect(
     mockExecute.mock.calls.some((call) => String(call[0]).includes('DELETE FROM credentials')),
   ).toBe(true);

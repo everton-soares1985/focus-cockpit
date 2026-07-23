@@ -4,6 +4,7 @@ import { getDb } from '../database/db';
 import {
   archiveProject,
   createProject,
+  deleteProjectRecord,
   listProjects,
   restoreProject,
   updateProject,
@@ -57,6 +58,14 @@ export function useRestoreProject() {
   const refresh = useRefreshProjects();
   return useMutation({
     mutationFn: async (id: string) => restoreProject(await getDb(), id),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeleteProject() {
+  const refresh = useRefreshProjects();
+  return useMutation({
+    mutationFn: async (id: string) => deleteProjectRecord(await getDb(), id),
     onSuccess: refresh,
   });
 }

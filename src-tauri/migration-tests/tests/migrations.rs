@@ -2,6 +2,7 @@ use rusqlite::{params, Connection, ErrorCode};
 
 const INITIAL_MIGRATION: &str = include_str!("../../migrations/01_initial.sql");
 const DOMAIN_RULES_MIGRATION: &str = include_str!("../../migrations/02_domain_rules.sql");
+const WRITE_SAFETY_MIGRATION: &str = include_str!("../../migrations/03_write_safety.sql");
 
 fn migrated_database() -> Connection {
     let connection = Connection::open_in_memory().expect("open in-memory sqlite");
@@ -11,6 +12,9 @@ fn migrated_database() -> Connection {
     connection
         .execute_batch(DOMAIN_RULES_MIGRATION)
         .expect("apply domain migration");
+    connection
+        .execute_batch(WRITE_SAFETY_MIGRATION)
+        .expect("apply write safety migration");
     connection
 }
 
@@ -114,6 +118,70 @@ fn focus_slot_is_cleared_when_project_is_archived() {
         )
         .expect("read focus");
     assert_eq!(focus, None);
+}
+
+#[test]
+fn deleting_a_project_clears_focus_without_touching_unrelated_records() {
+    let connection = migrated_database();
+    insert_project(&connection, "project-a", "A");
+    insert_project(&connection, "project-b", "B");
+    connection
+        .execute(
+            "UPDATE focus_slots SET project_id = 'project-a' WHERE lane = 'A'",
+            [],
+        )
+        .expect("set focus");
+
+    connection
+        .execute("DELETE FROM projects WHERE id = 'project-a'", [])
+        .expect("delete focused project");
+
+    let focus: Option<String> = connection
+        .query_row(
+            "SELECT project_id FROM focus_slots WHERE lane = 'A'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read focus");
+    let remaining: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM projects WHERE id = 'project-b'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("count unrelated project");
+
+    assert_eq!(focus, None);
+    assert_eq!(remaining, 1);
+}
+
+#[test]
+fn weekly_priority_rejects_an_archived_project() {
+    let connection = migrated_database();
+    insert_project(&connection, "archived-project", "A");
+    connection
+        .execute(
+            "UPDATE projects SET archived = 1 WHERE id = 'archived-project'",
+            [],
+        )
+        .expect("archive project");
+
+    let error = connection
+        .execute(
+            "INSERT INTO weekly_priorities (
+                id, week_start, position, title, project_id, created_at, updated_at
+             ) VALUES (
+                'priority-archived', '2026-07-20', 1, 'Invalid',
+                'archived-project', datetime('now'), datetime('now')
+             )",
+            [],
+        )
+        .expect_err("archived project must fail");
+
+    assert_eq!(
+        error.sqlite_error_code(),
+        Some(ErrorCode::ConstraintViolation)
+    );
 }
 
 #[test]

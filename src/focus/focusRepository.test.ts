@@ -12,22 +12,25 @@ function databaseMock(options: { lane?: 'A' | 'B'; archived?: number } = {}) {
 }
 
 describe('setFocusProject', () => {
-  test('salva projeto da mesma lane em uma transação', async () => {
+  test('salva projeto da mesma lane com uma única escrita atômica', async () => {
     const db = databaseMock({ lane: 'A' });
 
     await setFocusProject(db, 'A', 'project-a');
 
-    expect(db.execute).toHaveBeenNthCalledWith(1, 'BEGIN IMMEDIATE');
-    expect(db.execute).toHaveBeenLastCalledWith('COMMIT');
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(db.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO focus_slots'),
+      expect.arrayContaining(['A', 'project-a']),
+    );
   });
 
-  test('rejeita projeto da lane errada e faz rollback', async () => {
+  test('rejeita projeto da lane errada antes de escrever', async () => {
     const db = databaseMock({ lane: 'B' });
 
     await expect(setFocusProject(db, 'A', 'project-b')).rejects.toThrow(
       'Selecione um projeto da Lane A.',
     );
-    expect(db.execute).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(db.execute).not.toHaveBeenCalled();
   });
 
   test('permite limpar o slot sem consultar projeto', async () => {
@@ -36,6 +39,10 @@ describe('setFocusProject', () => {
     await setFocusProject(db, 'B', null);
 
     expect(db.select).not.toHaveBeenCalled();
-    expect(db.execute).toHaveBeenLastCalledWith('COMMIT');
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(db.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO focus_slots'),
+      expect.arrayContaining(['B', null]),
+    );
   });
 });

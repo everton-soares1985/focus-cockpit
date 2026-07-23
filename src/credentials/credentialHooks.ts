@@ -7,6 +7,7 @@ import {
 } from '../platform/credentials';
 import {
   createCredential,
+  deleteCredentialRecord,
   listCredentials,
   updateCredentialMetadata,
 } from './credentialRepository';
@@ -58,6 +59,14 @@ export function useUpdateCredentialMetadata() {
   return useMutation({
     mutationFn: async ({ id, input }: { id: string; input: CredentialMetadataInput }) =>
       updateCredentialMetadata(await getDb(), id, input),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeleteCredential() {
+  const refresh = useRefreshCredentials();
+  return useMutation({
+    mutationFn: async (id: string) => deleteCredentialRecord(await getDb(), id),
     onSuccess: refresh,
   });
 }

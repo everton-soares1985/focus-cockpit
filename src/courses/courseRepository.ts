@@ -157,3 +157,10 @@ export async function archiveCourse(db: Database, id: string): Promise<void> {
 export async function restoreCourse(db: Database, id: string): Promise<void> {
   await setCourseArchived(db, id, false);
 }
+
+export async function deleteCourseRecord(db: Database, id: string): Promise<void> {
+  const result = await db.execute('DELETE FROM courses WHERE id = $1', [id]);
+  if (result.rowsAffected !== 1) {
+    throw new Error('Curso não encontrado.');
+  }
+}

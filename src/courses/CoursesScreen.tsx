@@ -6,11 +6,13 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   useArchiveCourse,
   useCourses,
+  useDeleteCourse,
   useRestoreCourse,
 } from './courseHooks';
 import type { Course, CourseFilters, CourseStatus } from './courseSchema';
@@ -39,10 +41,12 @@ export default function CoursesScreen() {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [archiveCandidate, setArchiveCandidate] = useState<Course | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<Course | null>(null);
   const [feedback, setFeedback] = useState<ScreenFeedback>(null);
 
   const { data: courses, isLoading, isError, error } = useCourses(filters);
   const archiveMutation = useArchiveCourse();
+  const deleteMutation = useDeleteCourse();
   const restoreMutation = useRestoreCourse();
 
   const handleArchive = async () => {
@@ -63,6 +67,18 @@ export default function CoursesScreen() {
       setFeedback({ tone: 'success', text: `“${course.title}” foi restaurado.` });
     } catch (restoreError: unknown) {
       setFeedback({ tone: 'error', text: getErrorMessage(restoreError, 'Não foi possível restaurar o curso.') });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteCandidate) return;
+    try {
+      setFeedback(null);
+      await deleteMutation.mutateAsync(deleteCandidate.id);
+      setFeedback({ tone: 'success', text: `“${deleteCandidate.title}” foi removido somente do Focus Cockpit.` });
+      setDeleteCandidate(null);
+    } catch (deleteError: unknown) {
+      setFeedback({ tone: 'error', text: getErrorMessage(deleteError, 'Não foi possível remover o curso do app.') });
     }
   };
 
@@ -198,6 +214,9 @@ export default function CoursesScreen() {
                           <Archive className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       )}
+                      <Button variant="ghost" size="icon" onClick={() => setDeleteCandidate(course)} title="Remover do app" aria-label={`Remover ${course.title} do app`} className="hover:text-danger">
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -221,6 +240,15 @@ export default function CoursesScreen() {
         isPending={archiveMutation.isPending}
         onCancel={() => setArchiveCandidate(null)}
         onConfirm={handleArchive}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(deleteCandidate)}
+        title="Remover curso do app"
+        description={`“${deleteCandidate?.title ?? ''}” será apagado do banco do Focus Cockpit. Diplomas vinculados continuarão no acervo e nenhum arquivo do computador será excluído.`}
+        confirmLabel="Remover somente do app"
+        isPending={deleteMutation.isPending}
+        onCancel={() => setDeleteCandidate(null)}
+        onConfirm={handleDelete}
       />
     </div>
   );

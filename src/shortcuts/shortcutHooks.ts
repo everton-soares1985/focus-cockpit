@@ -4,6 +4,7 @@ import { getDb } from '../database/db';
 import {
   archiveShortcut,
   createShortcut,
+  deleteShortcutRecord,
   getFavoriteShortcuts,
   listShortcuts,
   restoreShortcut,
@@ -59,6 +60,14 @@ export function useRestoreShortcut() {
   const refresh = useRefreshShortcuts();
   return useMutation({
     mutationFn: async (id: string) => restoreShortcut(await getDb(), id),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeleteShortcut() {
+  const refresh = useRefreshShortcuts();
+  return useMutation({
+    mutationFn: async (id: string) => deleteShortcutRecord(await getDb(), id),
     onSuccess: refresh,
   });
 }

@@ -139,9 +139,8 @@ export default function AppHeader() {
   return (
     <>
       <header className="flex h-12 items-center justify-between border-b border-border bg-surface px-4">
-        <h1 className="text-sm font-semibold tracking-wide text-text-muted">
-          PAINEL PESSOAL <span className="mx-2 text-border-strong">|</span>{' '}
-          <span className="text-text">FOCUS COCKPIT</span>
+        <h1 className="text-sm font-semibold tracking-wide text-text">
+          FOCUS COCKPIT
         </h1>
         <Button
           variant="ghost"

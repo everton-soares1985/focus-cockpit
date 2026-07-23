@@ -1,5 +1,4 @@
 import type Database from '@tauri-apps/plugin-sql';
-import { withTransaction } from '../database/transaction';
 import type { Lane, Project } from '../projects/projectSchema';
 import { focusSelectionSchema, type FocusSlot } from './focusSchema';
 
@@ -88,31 +87,29 @@ export async function setFocusProject(
 ): Promise<void> {
   const selection = focusSelectionSchema.parse({ lane: laneInput, projectId });
 
-  await withTransaction(db, async () => {
-    if (selection.projectId) {
-      const projects = await db.select<Array<{ lane: Lane; archived: number }>>(
-        'SELECT lane, archived FROM projects WHERE id = $1',
-        [selection.projectId],
-      );
-      const project = projects[0];
-      if (!project) {
-        throw new Error('Projeto não encontrado.');
-      }
-      if (project.archived === 1) {
-        throw new Error('Um projeto arquivado não pode ser colocado em foco.');
-      }
-      if (project.lane !== selection.lane) {
-        throw new Error(`Selecione um projeto da Lane ${selection.lane}.`);
-      }
-    }
-
-    await db.execute(
-      `INSERT INTO focus_slots (lane, project_id, updated_at)
-       VALUES ($1, $2, $3)
-       ON CONFLICT(lane) DO UPDATE SET
-         project_id = excluded.project_id,
-         updated_at = excluded.updated_at`,
-      [selection.lane, selection.projectId, new Date().toISOString()],
+  if (selection.projectId) {
+    const projects = await db.select<Array<{ lane: Lane; archived: number }>>(
+      'SELECT lane, archived FROM projects WHERE id = $1',
+      [selection.projectId],
     );
-  });
+    const project = projects[0];
+    if (!project) {
+      throw new Error('Projeto não encontrado.');
+    }
+    if (project.archived === 1) {
+      throw new Error('Um projeto arquivado não pode ser colocado em foco.');
+    }
+    if (project.lane !== selection.lane) {
+      throw new Error(`Selecione um projeto da Lane ${selection.lane}.`);
+    }
+  }
+
+  await db.execute(
+    `INSERT INTO focus_slots (lane, project_id, updated_at)
+     VALUES ($1, $2, $3)
+     ON CONFLICT(lane) DO UPDATE SET
+       project_id = excluded.project_id,
+       updated_at = excluded.updated_at`,
+    [selection.lane, selection.projectId, new Date().toISOString()],
+  );
 }

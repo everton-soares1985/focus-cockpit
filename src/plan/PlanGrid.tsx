@@ -53,9 +53,9 @@ export function PlanGrid({ items, firstVisibleYear, totalYears, onEditItem }: Pl
   const categories: PlanCategory[] = planCategorySchema.options;
   const years = Array.from({ length: totalYears }, (_, index) => firstVisibleYear + index);
   const totalSemesters = totalYears * 2;
-  const cellWidth = 120;
+  const cellWidth = 150;
   const categoryWidth = 180;
-  const trackHeight = 46;
+  const trackHeight = 72;
 
   return (
     <div className="relative flex-1 overflow-auto">
@@ -91,7 +91,7 @@ export function PlanGrid({ items, firstVisibleYear, totalYears, onEditItem }: Pl
               totalSemesters,
             );
             const trackCount = Math.max(1, ...positionedItems.map((item) => item.track + 1));
-            const rowHeight = Math.max(60, trackCount * trackHeight + 8);
+            const rowHeight = Math.max(82, trackCount * trackHeight + 10);
 
             return (
               <div key={category} className="flex border-b border-border last:border-b-0" style={{ minHeight: rowHeight }}>
@@ -116,22 +116,25 @@ export function PlanGrid({ items, firstVisibleYear, totalYears, onEditItem }: Pl
                         key={item.id}
                         type="button"
                         onClick={() => onEditItem(item)}
-                        className="absolute overflow-hidden rounded-md border p-2 text-left shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lane-a"
+                        className="group/item absolute overflow-visible rounded-md border p-2.5 text-left shadow-sm transition-transform hover:z-20 hover:-translate-y-0.5 hover:shadow-md focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lane-a"
                         style={{
                           left: startIndex * cellWidth + 4,
                           top: track * trackHeight + 4,
                           width: width - 8,
-                          height: trackHeight - 8,
+                          height: trackHeight - 10,
                           backgroundColor: isDone ? 'var(--color-surface-soft)' : `${color}20`,
                           borderColor: isDone ? 'var(--color-border)' : `${color}60`,
                         }}
                         title={`${item.title}\nStatus: ${item.status}`}
                       >
-                        <span className={`block truncate text-xs font-semibold ${isDone ? 'text-text-muted' : ''}`} style={{ color: isDone ? undefined : color }}>
+                        <span className={`block line-clamp-2 break-words text-xs font-semibold leading-tight ${isDone ? 'text-text-muted' : ''}`} style={{ color: isDone ? undefined : color }}>
                           {item.title}
                         </span>
                         <span className="mt-0.5 block truncate text-[10px] opacity-70" style={{ color: isDone ? 'var(--color-text-muted)' : color }}>
                           {item.status}
+                        </span>
+                        <span className="pointer-events-none absolute left-0 top-full z-30 mt-1 hidden w-max max-w-80 whitespace-normal rounded-md border border-border-strong bg-surface-raised px-3 py-2 text-xs leading-5 text-text shadow-xl group-hover/item:block group-focus-visible/item:block">
+                          {item.title} · {item.status}
                         </span>
                       </button>
                     );
