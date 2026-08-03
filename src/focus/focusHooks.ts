@@ -8,6 +8,7 @@ import { getWeekStart } from './week';
 import {
   clearWeeklyPriority,
   getWeeklyPrioritySlots,
+  moveWeeklyPriority,
   saveWeeklyPriority,
   setWeeklyPriorityDone,
 } from './weeklyPriorityRepository';
@@ -68,6 +69,15 @@ export function useClearWeeklyPriority() {
       weekStart: string;
       position: 1 | 2 | 3;
     }) => clearWeeklyPriority(await getDb(), weekStart, position),
+    onSuccess: refresh,
+  });
+}
+
+export function useMoveWeeklyPriority() {
+  const refresh = useRefreshPriorities();
+  return useMutation({
+    mutationFn: async (input: Parameters<typeof moveWeeklyPriority>[1]) =>
+      moveWeeklyPriority(await getDb(), input),
     onSuccess: refresh,
   });
 }
