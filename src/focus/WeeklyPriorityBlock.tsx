@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { CalendarDays, Pencil, Trash2 } from 'lucide-react';
+import { useState, type DragEvent, type KeyboardEvent } from 'react';
+import { CalendarDays, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { 
   useWeeklyPriorities, 
   useSaveWeeklyPriority, 
   useToggleWeeklyPriority, 
-  useClearWeeklyPriority 
+  useClearWeeklyPriority,
+  useMoveWeeklyPriority,
 } from './focusHooks';
 import { useProjects } from '../projects/projectHooks';
 import { getWeekStart } from './week';
@@ -23,8 +24,11 @@ import type { WeeklyPriority, WeeklyPrioritySlot } from './focusSchema';
 export function WeeklyPriorityBlock() {
   const weekStart = getWeekStart();
   const { data: slots, isLoading } = useWeeklyPriorities(weekStart);
-  
+  const moveMutation = useMoveWeeklyPriority();
   const [editingPosition, setEditingPosition] = useState<1 | 2 | 3 | null>(null);
+  const [draggedPosition, setDraggedPosition] = useState<1 | 2 | 3 | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<1 | 2 | 3 | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -47,6 +51,68 @@ export function WeeklyPriorityBlock() {
     { position: 3, priority: null },
   ] as WeeklyPrioritySlot[];
 
+  const movePriority = async (
+    fromPosition: 1 | 2 | 3,
+    toPosition: 1 | 2 | 3,
+  ) => {
+    if (fromPosition === toPosition || moveMutation.isPending) return;
+
+    try {
+      setMoveError(null);
+      await moveMutation.mutateAsync({ weekStart, fromPosition, toPosition });
+    } catch (moveFailure: unknown) {
+      setMoveError(getErrorMessage(moveFailure, 'Não foi possível reordenar as prioridades.'));
+    } finally {
+      setDraggedPosition(null);
+      setDragOverPosition(null);
+    }
+  };
+
+  const handleDragStart = (
+    event: DragEvent<HTMLElement>,
+    position: 1 | 2 | 3,
+  ) => {
+    setMoveError(null);
+    setDraggedPosition(position);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(position));
+  };
+
+  const handleDragOver = (
+    event: DragEvent<HTMLElement>,
+    position: 1 | 2 | 3,
+  ) => {
+    if (draggedPosition === null || draggedPosition === position) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragOverPosition(position);
+  };
+
+  const handleDrop = async (
+    event: DragEvent<HTMLElement>,
+    position: 1 | 2 | 3,
+  ) => {
+    event.preventDefault();
+    const encodedPosition = Number(event.dataTransfer.getData('text/plain'));
+    const sourcePosition = draggedPosition ?? encodedPosition;
+    if (sourcePosition >= 1 && sourcePosition <= 3) {
+      await movePriority(sourcePosition as 1 | 2 | 3, position);
+    }
+  };
+
+  const handleKeyboardMove = async (
+    event: KeyboardEvent<HTMLElement>,
+    position: 1 | 2 | 3,
+  ) => {
+    const direction = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+    if (direction === 0) return;
+
+    const targetPosition = position + direction;
+    if (targetPosition < 1 || targetPosition > 3) return;
+    event.preventDefault();
+    await movePriority(position, targetPosition as 1 | 2 | 3);
+  };
+
   return (
     <div className="flex flex-col rounded-xl border border-border bg-surface p-5 h-full">
       <h3 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
@@ -58,10 +124,25 @@ export function WeeklyPriorityBlock() {
             key={slot.position} 
             slot={slot} 
             weekStart={weekStart}
+            isDragging={draggedPosition === slot.position}
+            isDropTarget={dragOverPosition === slot.position}
+            isMovePending={moveMutation.isPending}
             onEdit={() => setEditingPosition(slot.position as 1 | 2 | 3)} 
+            onDragStart={(event) => handleDragStart(event, slot.position)}
+            onDragOver={(event) => handleDragOver(event, slot.position)}
+            onDragLeave={() => {
+              if (dragOverPosition === slot.position) setDragOverPosition(null);
+            }}
+            onDrop={(event) => handleDrop(event, slot.position)}
+            onDragEnd={() => {
+              setDraggedPosition(null);
+              setDragOverPosition(null);
+            }}
+            onKeyboardMove={(event) => handleKeyboardMove(event, slot.position)}
           />
         ))}
       </div>
+      <FeedbackMessage message={moveError} className="mt-3" />
 
       {editingPosition !== null && (
         <EditPriorityModal
@@ -79,11 +160,29 @@ export function WeeklyPriorityBlock() {
 function PriorityItem({ 
   slot, 
   weekStart,
-  onEdit 
+  isDragging,
+  isDropTarget,
+  isMovePending,
+  onEdit,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+  onKeyboardMove,
 }: { 
   slot: WeeklyPrioritySlot; 
   weekStart: string;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  isMovePending: boolean;
   onEdit: () => void;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragOver: (event: DragEvent<HTMLElement>) => void;
+  onDragLeave: () => void;
+  onDrop: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onKeyboardMove: (event: KeyboardEvent<HTMLElement>) => void;
 }) {
   const toggleMutation = useToggleWeeklyPriority();
   const clearMutation = useClearWeeklyPriority();
@@ -113,7 +212,15 @@ function PriorityItem({
 
   if (!slot.priority) {
     return (
-      <div className="group flex items-center justify-between rounded-lg border border-dashed border-border bg-surface-soft/50 p-3 focus-within:border-border-strong">
+      <div
+        data-testid={`weekly-priority-slot-${slot.position}`}
+        className={`group flex items-center justify-between rounded-lg border border-dashed p-3 transition-colors focus-within:border-border-strong ${
+          isDropTarget ? 'border-lane-a bg-lane-a/10' : 'border-border bg-surface-soft/50'
+        }`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
         <span className="text-sm text-text-muted italic">Slot {slot.position} vazio</span>
         <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 text-xs opacity-70 group-hover:opacity-100 group-focus-within:opacity-100">
           Definir
@@ -125,8 +232,33 @@ function PriorityItem({
   const p = slot.priority;
 
   return (
-    <div className={`group rounded-lg border p-3 transition-colors focus-within:border-border-strong ${p.done ? 'border-success/30 bg-success/5' : 'border-border bg-surface-raised'}`}>
+    <div
+      data-testid={`weekly-priority-slot-${slot.position}`}
+      className={`group rounded-lg border p-3 transition-all focus-within:border-border-strong ${
+        isDropTarget
+          ? 'border-lane-a bg-lane-a/10'
+          : p.done
+            ? 'border-success/30 bg-success/5'
+            : 'border-border bg-surface-raised'
+      } ${isDragging ? 'opacity-45' : 'opacity-100'}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <div className="flex items-start gap-3">
+      <span
+        role="button"
+        tabIndex={0}
+        draggable={!isMovePending}
+        aria-label={`Mover prioridade ${slot.position}`}
+        title="Arraste para trocar a ordem; use as setas para mover pelo teclado"
+        className="mt-0.5 flex h-6 w-5 shrink-0 cursor-grab items-center justify-center rounded text-text-muted hover:bg-surface-soft hover:text-text active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-lane-a/60"
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onKeyDown={onKeyboardMove}
+      >
+        <GripVertical className="h-4 w-4" />
+      </span>
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-lane-a/40 bg-lane-a/10 text-xs font-semibold text-lane-a">
         {slot.position}
       </span>

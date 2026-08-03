@@ -14,6 +14,15 @@ export const weeklyPriorityDraftSchema = z.object({
   done: z.boolean().optional().default(false),
 });
 
+export const weeklyPriorityMoveSchema = z.object({
+  weekStart: z.iso.date(),
+  fromPosition: z.number().int().min(1).max(3),
+  toPosition: z.number().int().min(1).max(3),
+}).refine(({ fromPosition, toPosition }) => fromPosition !== toPosition, {
+  message: 'Escolha uma posição diferente.',
+  path: ['toPosition'],
+});
+
 export interface FocusSlot {
   lane: Lane;
   project: Project | null;
@@ -22,6 +31,7 @@ export interface FocusSlot {
 
 export type WeeklyPriorityDraft = z.output<typeof weeklyPriorityDraftSchema>;
 export type WeeklyPriorityDraftInput = z.input<typeof weeklyPriorityDraftSchema>;
+export type WeeklyPriorityMoveInput = z.input<typeof weeklyPriorityMoveSchema>;
 
 export interface WeeklyPriority {
   id: string;

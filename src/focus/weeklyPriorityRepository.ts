@@ -1,8 +1,10 @@
 import type Database from '@tauri-apps/plugin-sql';
 import {
   weeklyPriorityDraftSchema,
+  weeklyPriorityMoveSchema,
   type WeeklyPriority,
   type WeeklyPriorityDraftInput,
+  type WeeklyPriorityMoveInput,
   type WeeklyPrioritySlot,
 } from './focusSchema';
 
@@ -117,4 +119,57 @@ export async function clearWeeklyPriority(
     'DELETE FROM weekly_priorities WHERE week_start = $1 AND position = $2',
     [weekStart, position],
   );
+}
+
+export async function moveWeeklyPriority(
+  db: Database,
+  input: WeeklyPriorityMoveInput,
+): Promise<void> {
+  const move = weeklyPriorityMoveSchema.parse(input);
+  const timestamp = new Date().toISOString();
+  let transactionStarted = false;
+
+  try {
+    await db.execute('BEGIN IMMEDIATE');
+    transactionStarted = true;
+
+    const parked = await db.execute(
+      `UPDATE weekly_priorities
+       SET position = 0, updated_at = $1
+       WHERE week_start = $2 AND position = $3`,
+      [timestamp, move.weekStart, move.fromPosition],
+    );
+    if (parked.rowsAffected !== 1) {
+      throw new Error('Prioridade de origem não encontrada.');
+    }
+
+    await db.execute(
+      `UPDATE weekly_priorities
+       SET position = $1, updated_at = $2
+       WHERE week_start = $3 AND position = $4`,
+      [move.fromPosition, timestamp, move.weekStart, move.toPosition],
+    );
+
+    const moved = await db.execute(
+      `UPDATE weekly_priorities
+       SET position = $1, updated_at = $2
+       WHERE week_start = $3 AND position = 0`,
+      [move.toPosition, timestamp, move.weekStart],
+    );
+    if (moved.rowsAffected !== 1) {
+      throw new Error('Não foi possível concluir a troca de prioridades.');
+    }
+
+    await db.execute('COMMIT');
+    transactionStarted = false;
+  } catch (error) {
+    if (transactionStarted) {
+      try {
+        await db.execute('ROLLBACK');
+      } catch {
+        // Preserve the original error if SQLite already closed the transaction.
+      }
+    }
+    throw error;
+  }
 }
