@@ -34,7 +34,7 @@
     "active": true,
     "targets": ["nsis"],
     "resources": {
-      "target/release/WebView2Loader.dll": "WebView2Loader.dll"
+      "resources/WebView2Loader.dll": "WebView2Loader.dll"
     },
     "publisher": "Everton Soares",
     "category": "Productivity",
