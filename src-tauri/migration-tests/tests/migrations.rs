@@ -4,6 +4,7 @@ const INITIAL_MIGRATION: &str = include_str!("../../migrations/01_initial.sql");
 const DOMAIN_RULES_MIGRATION: &str = include_str!("../../migrations/02_domain_rules.sql");
 const WRITE_SAFETY_MIGRATION: &str = include_str!("../../migrations/03_write_safety.sql");
 const BOOKS_MIGRATION: &str = include_str!("../../migrations/04_books.sql");
+const JOURNAL_MIGRATION: &str = include_str!("../../migrations/05_daily_journal.sql");
 
 fn migrated_database() -> Connection {
     let connection = Connection::open_in_memory().expect("open in-memory sqlite");
@@ -19,6 +20,9 @@ fn migrated_database() -> Connection {
     connection
         .execute_batch(BOOKS_MIGRATION)
         .expect("apply books migration");
+    connection
+        .execute_batch(JOURNAL_MIGRATION)
+        .expect("apply journal migration");
     connection
 }
 
@@ -42,7 +46,8 @@ fn migrations_create_expected_schema_and_empty_focus_slots() {
              WHERE type = 'table'
                AND name IN (
                  'projects', 'focus_slots', 'weekly_priorities', 'plan_items',
-                 'plan_notes', 'courses', 'credentials', 'shortcuts', 'books'
+                 'plan_notes', 'courses', 'credentials', 'shortcuts', 'books',
+                 'journal_entries'
                )",
             [],
             |row| row.get(0),
@@ -52,7 +57,7 @@ fn migrations_create_expected_schema_and_empty_focus_slots() {
         .query_row("SELECT COUNT(*) FROM focus_slots", [], |row| row.get(0))
         .expect("count focus slots");
 
-    assert_eq!(table_count, 9);
+    assert_eq!(table_count, 10);
     assert_eq!(slot_count, 2);
 }
 
@@ -333,6 +338,54 @@ fn deleting_a_book_only_removes_its_database_record() {
         .query_row("SELECT COUNT(*) FROM books", [], |row| row.get(0))
         .expect("count books");
     assert_eq!(book_count, 0);
+}
+
+#[test]
+fn journal_enforces_one_valid_entry_per_day() {
+    let connection = migrated_database();
+    connection
+        .execute(
+            "INSERT INTO journal_entries (
+                id, entry_date, summary, content_md, created_at, updated_at
+             ) VALUES (
+                'journal-1', '2026-11-18', 'Interview', '## Notes',
+                datetime('now'), datetime('now')
+             )",
+            [],
+        )
+        .expect("insert journal entry");
+
+    let duplicate = connection
+        .execute(
+            "INSERT INTO journal_entries (
+                id, entry_date, summary, content_md, created_at, updated_at
+             ) VALUES (
+                'journal-2', '2026-11-18', 'Duplicate', '',
+                datetime('now'), datetime('now')
+             )",
+            [],
+        )
+        .expect_err("duplicate day must fail");
+    assert_eq!(
+        duplicate.sqlite_error_code(),
+        Some(ErrorCode::ConstraintViolation)
+    );
+
+    let invalid_date = connection
+        .execute(
+            "INSERT INTO journal_entries (
+                id, entry_date, summary, content_md, created_at, updated_at
+             ) VALUES (
+                'journal-3', '2026-02-31', 'Invalid date', '',
+                datetime('now'), datetime('now')
+             )",
+            [],
+        )
+        .expect_err("invalid calendar date must fail");
+    assert_eq!(
+        invalid_date.sqlite_error_code(),
+        Some(ErrorCode::ConstraintViolation)
+    );
 }
 
 #[test]

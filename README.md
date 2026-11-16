@@ -8,12 +8,12 @@ It is a personal productivity tool and a public portfolio project. The product r
 
 ## Development status
 
-Version `0.1.0` is a functional Windows release candidate. The native shell, local data layer, and the six-screen visual interface are integrated and exercised through the packaged executable.
+Version `0.1.3` is a functional Windows release candidate. The native shell, local data layer, and eight-screen visual interface are integrated and exercised through the packaged executable.
 
 - Local SQLite schema and versioned migrations
 - Lane A / Lane B focus selection
 - Three weekly priorities
-- Projects, career plan, courses, credentials, and file shortcuts
+- Projects, career plan, daily Markdown journal, courses, books, credentials, and file shortcuts
 - Safe native file opening and credential import/export
 - Consistent backup and guarded restore
 - Demonstration dataset with targeted cleanup
@@ -54,7 +54,9 @@ The application stores only paths manually selected by the user. Diplomas and ce
 | Foco | One active project per Lane, three weekly priorities, and favorite shortcuts |
 | Plano | A semester-based career timeline inspired by an evolved spreadsheet |
 | Projetos | Searchable project table with Lane, status, priority, and next action |
+| Diário | Date-based Markdown journal with a short summary, preview mode, entry markers, and SQLite autosave |
 | Cursos | Course planning and completion records linked to credentials |
+| Livros | Personal reading library with status, progress, notes, files, and links |
 | Diplomas | Local gallery for imported PDFs and images |
 | Arquivos | Manual locator for safe file and folder shortcuts |
 
@@ -86,6 +88,7 @@ The code is organized by feature. There are no generic `utils`, `helpers`, or `c
 - React 19 and TypeScript
 - Vite and Tailwind CSS 4
 - TanStack Query and React Hook Form
+- React DayPicker and React Markdown
 - Zod
 - SQLite through the Tauri SQL plugin
 - Vitest and Testing Library
@@ -159,3 +162,5 @@ Before publishing a change:
 ## License
 
 [MIT](LICENSE) © 2026 Everton Soares.
+
+Security reports should follow the private process described in [SECURITY.md](SECURITY.md).

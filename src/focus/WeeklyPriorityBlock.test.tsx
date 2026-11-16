@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { WeeklyPriorityBlock } from './WeeklyPriorityBlock';
+import { getWeekStart } from './week';
 
 const { movePriority } = vi.hoisted(() => ({
   movePriority: vi.fn().mockResolvedValue(undefined),
@@ -76,7 +77,7 @@ test('troca prioridades quando uma tarefa é arrastada sobre outra', async () =>
 
   await waitFor(() => {
     expect(movePriority).toHaveBeenCalledWith({
-      weekStart: '2026-08-03',
+      weekStart: getWeekStart(),
       fromPosition: 2,
       toPosition: 1,
     });
