@@ -1,4 +1,4 @@
-# Focus Cockpit 0.1 — Release Candidate Walkthrough
+# Focus Cockpit 0.1.3 — Release Candidate Walkthrough
 
 This document records the verified state of the first complete desktop candidate. It replaces the earlier Phase 0 report, which described only the project foundation.
 
@@ -7,7 +7,9 @@ This document records the verified state of the first complete desktop candidate
 - **Foco:** one selected project per Lane, last progress, next action, three weekly priorities, and favorite shortcuts.
 - **Plano:** semester timeline with overlap-aware tracks plus editable priority, course, and suggested-project notes.
 - **Projetos:** searchable table with Lane, area, status, priority, next action, last progress, folder state, focus selection, and archive controls.
+- **Diário:** one Markdown page per date, short summary, edit/preview modes, calendar entry markers, and debounced SQLite autosave.
 - **Cursos:** searchable course repository with status, dates, priority, and credential relationship.
+- **Livros:** personal reading library with reading status, progress, notes, local file references, and external links.
 - **Diplomas:** local PDF/image gallery with secure import, preview, export, metadata editing, and course association.
 - **Arquivos:** manual file/folder locator with categories, favorites, path copying, relocation, native availability checks, and safe opening.
 - **Backup:** consistent `.focusbackup` creation, integrity inspection, guarded restore, and automatic pre-restore safety copy.
@@ -29,12 +31,12 @@ The visual implementation was reviewed against the native and domain contracts b
 ## Verification performed
 
 - `pnpm lint`
-- `pnpm test`: 15 test files and 30 tests passing
+- `pnpm test`: 23 test files and 50 tests passing
 - `pnpm build`
 - `cargo fmt --check`
 - `cargo clippy -- -D warnings`
 - security-policy crate: 5 tests passing
-- migration test crate: 8 tests passing
+- migration test crate: 13 tests passing
 - `pnpm build:windows`: NSIS installer produced successfully
 - packaged `focus-cockpit.exe` launched with the production ACL and existing SQLite data
 - all six screens visually inspected at the configured 1280×800 window size

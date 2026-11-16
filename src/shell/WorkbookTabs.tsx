@@ -5,6 +5,7 @@ import {
   FolderOpen,
   GraduationCap,
   ListChecks,
+  NotebookPen,
   Target,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
@@ -13,6 +14,7 @@ const tabs = [
   { path: '/focus', label: 'Foco', icon: Target },
   { path: '/plan', label: 'Plano', icon: ListChecks },
   { path: '/projects', label: 'Projetos', icon: FolderOpen },
+  { path: '/journal', label: 'Diário', icon: NotebookPen },
   { path: '/courses', label: 'Cursos', icon: GraduationCap },
   { path: '/books', label: 'Livros', icon: BookOpen },
   { path: '/credentials', label: 'Diplomas', icon: Award },

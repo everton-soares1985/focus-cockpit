@@ -31,6 +31,12 @@ pub fn run() {
             sql: include_str!("../migrations/04_books.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        tauri_plugin_sql::Migration {
+            version: 5,
+            description: "add_daily_journal",
+            sql: include_str!("../migrations/05_daily_journal.sql"),
+            kind: tauri_plugin_sql::MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
